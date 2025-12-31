@@ -150,7 +150,11 @@ public class PsdColorSeparator {
      */
     public static void processFile(String inputFile, String outputFile,
                                    double minExpansion, double maxExpansion) throws IOException {
-        // Step 1: Read and flatten the PSD, get DPI
+        // Step 1: Read invisible layers from input PSD
+        System.out.println("Reading invisible layers from input...");
+        List<LayerData> invisibleLayers = readInvisibleLayers(inputFile);
+
+        // Step 2: Read and flatten the PSD, get DPI
         PsdInfo psdInfo = readAndFlattenPSD(inputFile);
         BufferedImage flattened = psdInfo.image;
         int dpi = psdInfo.dpi;
@@ -161,10 +165,10 @@ public class PsdColorSeparator {
             minExpansion > 0 ? (int)Math.round(1.0 / minExpansion) : 0,
             maxExpansion > 0 ? (int)Math.round(1.0 / maxExpansion) : 0);
 
-        // Step 2: Count distinct colors (ignoring transparent pixels)
+        // Step 3: Count distinct colors (ignoring transparent pixels)
         Map<Integer, Integer> colorCounts = countColors(flattened);
 
-        // Step 3: Check color count
+        // Step 4: Check color count
         if (colorCounts.size() > MAX_COLORS) {
             throw new IllegalStateException(
                 String.format("Image has %d distinct colors, exceeds maximum of %d",
@@ -173,23 +177,33 @@ public class PsdColorSeparator {
 
         System.out.println("Found " + colorCounts.size() + " distinct colors");
 
-        // Step 4: Sort colors by lightness (light to dark)
+        // Step 5: Sort colors by lightness (light to dark)
         List<Integer> sortedColors = sortColorsByLightness(colorCounts.keySet());
 
-        // Step 5: Create output PSD with color-separated layers and trapping
-        List<LayerData> layers = createColorSeparatedLayers(flattened, sortedColors, dpi,
-                                                            minExpansion, maxExpansion);
+        // Step 6: Create output PSD with color-separated layers and trapping
+        List<LayerData> colorSeparatedLayers = createColorSeparatedLayers(flattened, sortedColors, dpi,
+                                                                          minExpansion, maxExpansion);
 
-        // Step 6: Verify that flattening the trapped layers matches the original
+        // Step 7: Combine invisible layers (on top) with color-separated layers (below)
+        List<LayerData> allLayers = new ArrayList<>();
+        allLayers.addAll(invisibleLayers); // Invisible layers first (appear on top in Photoshop)
+        allLayers.addAll(colorSeparatedLayers); // Color-separated layers below
+
+        System.out.println("Total layers in output: " + allLayers.size() +
+                         " (" + invisibleLayers.size() + " invisible + " +
+                         colorSeparatedLayers.size() + " color-separated)");
+
+        // Step 8: Verify that flattening the trapped layers matches the original
+        // Note: We only verify color-separated layers, not invisible ones
         System.out.println("Verifying trapped output...");
         int width = flattened.getWidth();
         int height = flattened.getHeight();
-        BufferedImage trappedFlattened = flattenLayers(layers, width, height);
+        BufferedImage trappedFlattened = flattenLayers(colorSeparatedLayers, width, height);
         verifyFlattening(flattened, trappedFlattened);
 
-        // Step 7: Write the PSD file
+        // Step 9: Write the PSD file
         System.out.println("Writing output PSD file...");
-        writePSD(outputFile, width, height, layers);
+        writePSD(outputFile, width, height, allLayers);
         System.out.println("Output file written.");
     }
 
@@ -309,6 +323,291 @@ public class PsdColorSeparator {
 
             System.out.println("Read PSD: " + image.getWidth() + "x" + image.getHeight());
             return new PsdInfo(image, dpi);
+        }
+    }
+
+    /**
+     * Reads individual layers from a PSD file, including invisible layers
+     * Returns a list of invisible layers only
+     */
+    private static List<LayerData> readInvisibleLayers(String filename) throws IOException {
+        List<LayerData> invisibleLayers = new ArrayList<>();
+
+        try (RandomAccessFile raf = new RandomAccessFile(filename, "r")) {
+            // Skip file header (26 bytes)
+            raf.skipBytes(26);
+
+            // Skip color mode data section
+            int colorModeDataLength = raf.readInt();
+            raf.skipBytes(colorModeDataLength);
+
+            // Skip image resources section
+            int imageResourcesLength = raf.readInt();
+            raf.skipBytes(imageResourcesLength);
+
+            // Read layer and mask information section
+            int layerMaskInfoLength = raf.readInt();
+            if (layerMaskInfoLength == 0) {
+                return invisibleLayers; // No layers in this file
+            }
+
+            long layerMaskInfoEnd = raf.getFilePointer() + layerMaskInfoLength;
+
+            // Read layer info section
+            int layerInfoLength = raf.readInt();
+            if (layerInfoLength == 0) {
+                return invisibleLayers;
+            }
+
+            // Read number of layers
+            short layerCount = raf.readShort();
+            int absoluteLayerCount = Math.abs(layerCount);
+
+            System.out.println("Found " + absoluteLayerCount + " layers in input PSD");
+
+            // Read layer records
+            List<LayerRecord> layerRecords = new ArrayList<>();
+            for (int i = 0; i < absoluteLayerCount; i++) {
+                LayerRecord record = readLayerRecord(raf);
+                layerRecords.add(record);
+
+                if (!record.visible) {
+                    System.out.println("  Layer " + (i + 1) + ": \"" + record.name + "\" (invisible)");
+                }
+            }
+
+            // Read layer image data
+            for (int i = 0; i < absoluteLayerCount; i++) {
+                LayerRecord record = layerRecords.get(i);
+
+                // Only read image data for invisible layers
+                if (!record.visible) {
+                    BufferedImage layerImage = readLayerImage(raf, record);
+                    invisibleLayers.add(new LayerData(
+                        record.name,
+                        layerImage,
+                        record.left,
+                        record.top,
+                        false // invisible
+                    ));
+                } else {
+                    // Skip visible layer image data
+                    skipLayerImageData(raf, record);
+                }
+            }
+        }
+
+        System.out.println("Read " + invisibleLayers.size() + " invisible layers from input");
+        return invisibleLayers;
+    }
+
+    /**
+     * Helper class to hold layer record information
+     */
+    private static class LayerRecord {
+        int top, left, bottom, right;
+        int width, height;
+        int channelCount;
+        List<ChannelInfo> channels;
+        String name;
+        boolean visible;
+
+        static class ChannelInfo {
+            short id;
+            int dataLength;
+        }
+    }
+
+    /**
+     * Reads a layer record from the PSD file
+     */
+    private static LayerRecord readLayerRecord(RandomAccessFile raf) throws IOException {
+        LayerRecord record = new LayerRecord();
+
+        // Read rectangle
+        record.top = raf.readInt();
+        record.left = raf.readInt();
+        record.bottom = raf.readInt();
+        record.right = raf.readInt();
+
+        record.width = record.right - record.left;
+        record.height = record.bottom - record.top;
+
+        // Read number of channels
+        record.channelCount = raf.readUnsignedShort();
+        record.channels = new ArrayList<>();
+
+        // Read channel information
+        for (int i = 0; i < record.channelCount; i++) {
+            LayerRecord.ChannelInfo channel = new LayerRecord.ChannelInfo();
+            channel.id = raf.readShort();
+            channel.dataLength = raf.readInt();
+            record.channels.add(channel);
+        }
+
+        // Read blend mode signature (should be '8BIM')
+        byte[] sig = new byte[4];
+        raf.readFully(sig);
+
+        // Read blend mode key
+        raf.skipBytes(4);
+
+        // Read opacity
+        raf.skipBytes(1);
+
+        // Read clipping
+        raf.skipBytes(1);
+
+        // Read flags byte - THIS IS WHERE VISIBILITY IS STORED
+        int flags = raf.readUnsignedByte();
+        record.visible = (flags & 0x02) != 0; // bit 1 = visible
+
+        // Read filler
+        raf.skipBytes(1);
+
+        // Read extra data length
+        int extraDataLength = raf.readInt();
+        long extraDataEnd = raf.getFilePointer() + extraDataLength;
+
+        // Skip layer mask data
+        int layerMaskDataLength = raf.readInt();
+        raf.skipBytes(layerMaskDataLength);
+
+        // Skip layer blending ranges
+        int blendingRangesLength = raf.readInt();
+        raf.skipBytes(blendingRangesLength);
+
+        // Read layer name (Pascal string)
+        int nameLength = raf.readUnsignedByte();
+        byte[] nameBytes = new byte[nameLength];
+        raf.readFully(nameBytes);
+        record.name = new String(nameBytes, "ISO-8859-1");
+
+        // Skip to end of extra data (includes padding)
+        raf.seek(extraDataEnd);
+
+        return record;
+    }
+
+    /**
+     * Reads layer image data for a specific layer
+     */
+    private static BufferedImage readLayerImage(RandomAccessFile raf, LayerRecord record) throws IOException {
+        int width = record.width;
+        int height = record.height;
+
+        if (width <= 0 || height <= 0) {
+            // Empty layer, return transparent image
+            return new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+        }
+
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+
+        // Read each channel
+        byte[][] channelData = new byte[record.channelCount][width * height];
+
+        for (int c = 0; c < record.channelCount; c++) {
+            // Read compression method
+            int compression = raf.readUnsignedShort();
+
+            if (compression == 0) {
+                // Raw data
+                raf.readFully(channelData[c]);
+            } else if (compression == 1) {
+                // RLE compressed
+                channelData[c] = readRLEChannel(raf, width, height);
+            } else {
+                throw new IOException("Unsupported compression method: " + compression);
+            }
+        }
+
+        // Map channel data to ARGB image
+        // Channel IDs: -1 = alpha, 0 = red, 1 = green, 2 = blue
+        int alphaIndex = -1;
+        int redIndex = -1;
+        int greenIndex = -1;
+        int blueIndex = -1;
+
+        for (int c = 0; c < record.channelCount; c++) {
+            short channelId = record.channels.get(c).id;
+            if (channelId == -1) alphaIndex = c;
+            else if (channelId == 0) redIndex = c;
+            else if (channelId == 1) greenIndex = c;
+            else if (channelId == 2) blueIndex = c;
+        }
+
+        // Build ARGB image
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int idx = y * width + x;
+
+                int a = (alphaIndex >= 0) ? (channelData[alphaIndex][idx] & 0xFF) : 255;
+                int r = (redIndex >= 0) ? (channelData[redIndex][idx] & 0xFF) : 0;
+                int g = (greenIndex >= 0) ? (channelData[greenIndex][idx] & 0xFF) : 0;
+                int b = (blueIndex >= 0) ? (channelData[blueIndex][idx] & 0xFF) : 0;
+
+                int argb = (a << 24) | (r << 16) | (g << 8) | b;
+                image.setRGB(x, y, argb);
+            }
+        }
+
+        return image;
+    }
+
+    /**
+     * Reads an RLE-compressed channel
+     */
+    private static byte[] readRLEChannel(RandomAccessFile raf, int width, int height) throws IOException {
+        byte[] result = new byte[width * height];
+
+        // Read byte counts for each scanline
+        int[] byteCounts = new int[height];
+        for (int i = 0; i < height; i++) {
+            byteCounts[i] = raf.readUnsignedShort();
+        }
+
+        // Read and decompress each scanline
+        int destIdx = 0;
+        for (int row = 0; row < height; row++) {
+            byte[] compressedRow = new byte[byteCounts[row]];
+            raf.readFully(compressedRow);
+
+            // Decompress PackBits RLE
+            int srcIdx = 0;
+            int rowDestIdx = 0;
+            while (srcIdx < compressedRow.length && rowDestIdx < width) {
+                byte header = compressedRow[srcIdx++];
+
+                if (header >= 0) {
+                    // Literal run: copy (header + 1) bytes
+                    int count = header + 1;
+                    for (int i = 0; i < count && rowDestIdx < width; i++) {
+                        result[destIdx++] = compressedRow[srcIdx++];
+                        rowDestIdx++;
+                    }
+                } else if (header != -128) {
+                    // RLE run: repeat next byte (1 - header) times
+                    int count = 1 - header;
+                    byte value = compressedRow[srcIdx++];
+                    for (int i = 0; i < count && rowDestIdx < width; i++) {
+                        result[destIdx++] = value;
+                        rowDestIdx++;
+                    }
+                }
+                // header == -128 is a no-op
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Skips layer image data without reading it into memory
+     */
+    private static void skipLayerImageData(RandomAccessFile raf, LayerRecord record) throws IOException {
+        for (int c = 0; c < record.channelCount; c++) {
+            int dataLength = record.channels.get(c).dataLength;
+            raf.skipBytes(dataLength);
         }
     }
 
@@ -786,12 +1085,18 @@ public class PsdColorSeparator {
         BufferedImage image;
         int left;
         int top;
+        boolean visible;
 
         LayerData(String name, BufferedImage image, int left, int top) {
+            this(name, image, left, top, true);
+        }
+
+        LayerData(String name, BufferedImage image, int left, int top, boolean visible) {
             this.name = name;
             this.image = image;
             this.left = left;
             this.top = top;
+            this.visible = visible;
         }
     }
 
@@ -921,7 +1226,10 @@ public class PsdColorSeparator {
         dos.writeBytes("norm");                     // Blend mode key (normal)
         dos.writeByte(255);                         // Opacity
         dos.writeByte(0);                           // Clipping
-        dos.writeByte(0);                           // Flags
+
+        // Flags byte: bit 1 = visible (0x02)
+        int flags = layer.visible ? 0x02 : 0x00;
+        dos.writeByte(flags);                       // Flags
         dos.writeByte(0);                           // Filler
 
         // Extra data
