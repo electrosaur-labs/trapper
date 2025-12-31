@@ -11,7 +11,6 @@ Trapper reads Photoshop PSD files, separates colors into individual layers, and 
 - **Color Separation**: Automatically separates images into distinct color layers sorted by lightness
 - **Intelligent Trapping**: Applies morphological dilation with linear interpolation from lightest to darkest
 - **Configurable Trap Sizes**: Supports both fractional (`1/32`, `1/64`) and decimal inch specifications
-- **Invisible Layer Preservation**: Preserves hidden layers from input PSD, placing them above color-separated layers
 - **White Layer Optimization**: Skips trapping computation for white base layers
 - **PackBits RLE Compression**: Reduces output file sizes by 96%+ (827 MB → 28 MB)
 - **Parallel Processing**: Multi-threaded layer processing for 3.2x speedup
@@ -63,16 +62,14 @@ Trap sizes can be specified as:
 
 ## How It Works
 
-1. **Read Invisible Layers**: Detects and preserves hidden layers from input PSD
-2. **Read PSD**: Loads multi-layer PSD file and flattens to analyze colors
-3. **Color Analysis**: Identifies distinct colors and sorts by lightness (light to dark)
-4. **Mask Generation**: Creates masks showing where darker colors will cover lighter colors
-5. **Layer Creation**: Separates each color into its own layer
-6. **Trapping**: Expands lighter colors into areas covered by darker colors using iterative dilation
-7. **Layer Combination**: Merges invisible layers (top) with color-separated layers (bottom)
-8. **Compression**: Applies PackBits RLE compression to reduce file size
-9. **Verification**: Flattens trapped layers and compares to original to ensure correctness
-10. **Output**: Writes color-separated PSD with trapped layers and preserved invisible layers
+1. **Read PSD**: Loads multi-layer PSD file and flattens to analyze colors
+2. **Color Analysis**: Identifies distinct colors and sorts by lightness (light to dark)
+3. **Mask Generation**: Creates masks showing where darker colors will cover lighter colors
+4. **Layer Creation**: Separates each color into its own layer
+5. **Trapping**: Expands lighter colors into areas covered by darker colors using iterative dilation
+6. **Compression**: Applies PackBits RLE compression to reduce file size
+7. **Verification**: Flattens trapped layers and compares to original to ensure correctness
+8. **Output**: Writes color-separated PSD with trapped layers
 
 ### Trap Size Interpolation
 
@@ -89,38 +86,6 @@ At 3000 DPI with default range (0 to 1/32"):
 - Layer 4: 47 pixels (0.0157")
 - Layer 5: 24 pixels (0.0080")
 - Layer 6 (darkest): 0 pixels (defines edges)
-
-### Invisible Layer Preservation
-
-Trapper automatically preserves hidden (invisible) layers from the input PSD file:
-
-**Input Layer Detection:**
-- Reads all layers from input PSD file
-- Identifies invisible layers using visibility flag (bit 1 in layer flags byte)
-- Reads image data only for invisible layers to optimize memory usage
-- Skips visible layers as they're already included in the flattened composite
-
-**Output Layer Organization:**
-1. **Invisible layers** (from input) - appear first, maintaining original order
-2. **Color-separated layers** (generated) - sorted lightest to darkest
-
-**Use Cases:**
-- **Design guides**: Keep ruler guides, crop marks, or registration marks hidden
-- **Reference layers**: Preserve original artwork or notes for comparison
-- **Workflow layers**: Maintain layer organization from design tools
-- **Client notes**: Keep feedback or annotation layers without affecting trapping
-
-**Example Output:**
-```
-Total layers in output: 7 (2 invisible + 5 color-separated)
-  - Layer 1: "Registration marks" (invisible)
-  - Layer 2: "Design notes" (invisible)
-  - Layer 3: White (visible, no trap)
-  - Layer 4: Yellow (visible, 94px trap)
-  - Layer 5: Red (visible, 47px trap)
-  - Layer 6: Blue (visible, 24px trap)
-  - Layer 7: Black (visible, 0px trap - defines edges)
-```
 
 ## Performance
 
@@ -235,24 +200,16 @@ In offset lithography, each color is printed from a separate plate. Slight misal
 
 ### Implementation Approach
 
-- **PSD Layer Reading**: Manual parsing of PSD file structure to extract individual layers with metadata
 - **Morphological Dilation**: Iterative 4-connected neighbor expansion
 - **Masked Expansion**: Only expands into areas that will be covered by darker colors
 - **Parallel Processing**: Each layer processed independently using thread pool
-- **RLE Compression**: PackBits algorithm reduces file size significantly (both reading and writing)
+- **RLE Compression**: PackBits algorithm reduces file size significantly
 
 ### File Format
 
-**Input PSD Reading:**
-- Parses PSD file header and layer structure manually using RandomAccessFile
-- Reads layer records with visibility flags, names, positions, and channel information
-- Supports both raw (compression mode 0) and RLE (compression mode 1) layer data
-- Decompresses PackBits RLE-encoded channels on the fly
-
-**Output PSD Writing:**
 Output PSD files contain:
 - File header with dimensions and color mode
-- Layer records with metadata (position, blend mode, opacity, visibility flags)
+- Layer records with metadata (position, blend mode, opacity)
 - Layer image data (RGBA channels with RLE compression)
 - Flattened composite image for preview
 
