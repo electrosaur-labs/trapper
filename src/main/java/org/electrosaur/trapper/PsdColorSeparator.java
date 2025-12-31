@@ -36,22 +36,86 @@ public class PsdColorSeparator {
 
     private static final int MAX_COLORS = 10;
 
+    // Default expansion range in inches
+    private static final double DEFAULT_MIN_EXPANSION = 0.0;      // Darkest layer
+    private static final double DEFAULT_MAX_EXPANSION = 1.0 / 32.0; // Lightest layer (1/32")
+
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("Usage: java PsdColorSeparator <input.psd>");
+            System.err.println("Usage: java PsdColorSeparator <input.psd> [minTrap] [maxTrap]");
+            System.err.println("  minTrap: minimum trap size (darkest layer, default: 0)");
+            System.err.println("  maxTrap: maximum trap size (lightest layer, default: 1/32)");
+            System.err.println("  Trap sizes can be specified as:");
+            System.err.println("    - Fractions: 1/32, 1/64, 1/16, etc.");
+            System.err.println("    - Decimals: 0.03125, 0.015625, etc.");
             System.exit(1);
         }
 
         String inputFile = args[0];
         String outputFile = generateOutputFilename(inputFile);
 
+        // Parse optional trap size arguments
+        double minExpansion = DEFAULT_MIN_EXPANSION;
+        double maxExpansion = DEFAULT_MAX_EXPANSION;
+
+        if (args.length >= 3) {
+            try {
+                minExpansion = parseTrapSize(args[1]);
+                maxExpansion = parseTrapSize(args[2]);
+
+                if (minExpansion < 0 || maxExpansion < 0) {
+                    System.err.println("Error: Trap sizes must be non-negative");
+                    System.exit(1);
+                }
+                if (minExpansion > maxExpansion) {
+                    System.err.println("Error: minTrap must be <= maxTrap");
+                    System.exit(1);
+                }
+            } catch (IllegalArgumentException e) {
+                System.err.println("Error: " + e.getMessage());
+                System.exit(1);
+            }
+        }
+
         try {
-            processFile(inputFile, outputFile);
+            processFile(inputFile, outputFile, minExpansion, maxExpansion);
             System.out.println("Successfully created color-separated PSD: " + outputFile);
         } catch (Exception e) {
             System.err.println("Error processing PSD file: " + e.getMessage());
             e.printStackTrace();
             System.exit(1);
+        }
+    }
+
+    /**
+     * Parses a trap size specification in either fractional (1/32) or decimal (0.03125) format
+     */
+    private static double parseTrapSize(String spec) {
+        spec = spec.trim();
+
+        // Check if it's a fraction (e.g., "1/32")
+        if (spec.contains("/")) {
+            String[] parts = spec.split("/");
+            if (parts.length != 2) {
+                throw new IllegalArgumentException("Invalid fraction format: " + spec + ". Use format like 1/32");
+            }
+            try {
+                double numerator = Double.parseDouble(parts[0].trim());
+                double denominator = Double.parseDouble(parts[1].trim());
+                if (denominator == 0) {
+                    throw new IllegalArgumentException("Division by zero in fraction: " + spec);
+                }
+                return numerator / denominator;
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid fraction format: " + spec + ". Use numbers like 1/32");
+            }
+        } else {
+            // Parse as decimal
+            try {
+                return Double.parseDouble(spec);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid decimal format: " + spec + ". Use format like 0.03125 or 1/32");
+            }
         }
     }
 
@@ -84,13 +148,18 @@ public class PsdColorSeparator {
     /**
      * Main processing logic
      */
-    public static void processFile(String inputFile, String outputFile) throws IOException {
+    public static void processFile(String inputFile, String outputFile,
+                                   double minExpansion, double maxExpansion) throws IOException {
         // Step 1: Read and flatten the PSD, get DPI
         PsdInfo psdInfo = readAndFlattenPSD(inputFile);
         BufferedImage flattened = psdInfo.image;
         int dpi = psdInfo.dpi;
 
         System.out.println("Image DPI: " + dpi);
+        System.out.printf("Trap range: %.6f\" to %.6f\" (1/%d\" to 1/%d\")%n",
+            minExpansion, maxExpansion,
+            minExpansion > 0 ? (int)Math.round(1.0 / minExpansion) : 0,
+            maxExpansion > 0 ? (int)Math.round(1.0 / maxExpansion) : 0);
 
         // Step 2: Count distinct colors (ignoring transparent pixels)
         Map<Integer, Integer> colorCounts = countColors(flattened);
@@ -108,7 +177,8 @@ public class PsdColorSeparator {
         List<Integer> sortedColors = sortColorsByLightness(colorCounts.keySet());
 
         // Step 5: Create output PSD with color-separated layers and trapping
-        List<LayerData> layers = createColorSeparatedLayers(flattened, sortedColors, dpi);
+        List<LayerData> layers = createColorSeparatedLayers(flattened, sortedColors, dpi,
+                                                            minExpansion, maxExpansion);
 
         // Step 6: Verify that flattening the trapped layers matches the original
         System.out.println("Verifying trapped output...");
@@ -369,23 +439,16 @@ public class PsdColorSeparator {
 
     /**
      * Calculates the expansion (trap size) in pixels for a given layer index
-     * Lightest layer (index 0): 1/64 inch
-     * Darkest layer (index n-1): 0 (no expansion - defines edges)
+     * Lightest layer (index 0): maxExpansion
+     * Darkest layer (index n-1): minExpansion
      * Linear interpolation for layers in between
      */
-    private static int calculateExpansion(int layerIndex, int totalLayers, int dpi) {
+    private static int calculateExpansion(int layerIndex, int totalLayers, int dpi,
+                                         double minExpansion, double maxExpansion) {
         if (totalLayers == 1) {
-            return 0; // No trapping needed for single color
+            // Single color: use minimum expansion
+            return (int) Math.round(minExpansion * dpi);
         }
-
-        // Darkest layer (topmost) should not be expanded
-        if (layerIndex == totalLayers - 1) {
-            return 0;
-        }
-
-        // Expansion in inches - reduced from 1/8" to 1/64" max for performance
-        double minExpansion = 0.0;         // Darkest (no expansion)
-        double maxExpansion = 1.0 / 64.0;  // Lightest (1/64 inch)
 
         // Linear interpolation from lightest to darkest
         double ratio = (double) layerIndex / (totalLayers - 1);
@@ -462,7 +525,8 @@ public class PsdColorSeparator {
      * Each layer only expands into areas that will be covered by darker colors
      */
     private static List<LayerData> createColorSeparatedLayers(BufferedImage source,
-                                                               List<Integer> sortedColors, int dpi) {
+                                                               List<Integer> sortedColors, int dpi,
+                                                               double minExpansion, double maxExpansion) {
         int width = source.getWidth();
         int height = source.getHeight();
 
@@ -587,7 +651,7 @@ public class PsdColorSeparator {
                 // If first color was white, adjust the expansion calculation
                 int adjustedIndex = firstColorIsWhite ? (layerIndex - 1) : layerIndex;
                 int adjustedTotal = firstColorIsWhite ? (sortedColors.size() - 1) : sortedColors.size();
-                int expansion = calculateExpansion(adjustedIndex, adjustedTotal, dpi);
+                int expansion = calculateExpansion(adjustedIndex, adjustedTotal, dpi, minExpansion, maxExpansion);
                 System.out.printf("[Layer %d/%d] Expansion: %d pixels (%.4f inches)%n",
                     layerIndex + 1, sortedColors.size(), expansion, (double) expansion / dpi);
 
