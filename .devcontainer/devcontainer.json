@@ -1,0 +1,40 @@
+{
+    "name": "GW CC AI",
+    "image": "artifactory.guidewire.com/ai-coding/claude-code:latest",
+    "mounts": [
+        "source=${localEnv:HOME}/.gradle,target=/home/node/.gradle,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.m2,target=/home/node/.m2,type=bind,consistency=cached"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode-remote.remote-containers",
+                "ms-vscode.vscode-json",
+                "ms-python.python",
+                "ms-vscode.vscode-typescript-next",
+                "vscjava.vscode-java-pack",
+                "golang.go",
+                "dbaeumer.vscode-eslint",
+                "anthropic.claude-code"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "zsh",
+                "terminal.integrated.profiles.linux": {
+                    "zsh": {
+                        "path": "/bin/zsh"
+                    }
+                }
+            }
+        }
+    },
+    "forwardPorts": [3000, 8000, 8080, 8081, 8190, 8280, 8580],
+    "containerEnv": {
+        "WORKSPACE_ROOT": "${containerWorkspaceFolder}",
+        "SHELL": "/bin/zsh",
+        "NODE_EXTRA_CA_CERTS": "/etc/ssl/certs/ca-certificates.crt",
+        "DOCKER_BUILDKIT": "1",
+        "PROPERTYSERVICE_CLIENT_SERVER_URI_OVERRIDE": "https://helios.api.omega2-andromeda.guidewire.net"
+    },
+    "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && echo 'GW CC AI: Claude Code development container ready (latest)!'",
+    "remoteUser": "node"
+}

@@ -1,0 +1,20 @@
+# Gradle
+.gradle/
+build/
+bin/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Output files
+*.psd
+*.tif
+*.tiff
+
+# OS
+.DS_Store
+Thumbs.db
