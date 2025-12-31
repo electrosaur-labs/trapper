@@ -23,8 +23,9 @@ dependencies {
     // This dependency is found on compile classpath of this component and consumers.
     implementation 'com.google.guava:guava:32.1.3-jre'
 
-    // TwelveMonkeys ImageIO for enhanced TIFF support
+    // TwelveMonkeys ImageIO for enhanced TIFF and PSD support
     implementation 'com.twelvemonkeys.imageio:imageio-tiff:3.11.0'
+    implementation 'com.twelvemonkeys.imageio:imageio-psd:3.11.0'
     implementation 'com.twelvemonkeys.imageio:imageio-core:3.11.0'
 
     // Use JUnit test framework
@@ -33,4 +34,25 @@ dependencies {
 
 // Define the main class for the application
 mainClassName = 'org.electrosaur.trapper.App'
+
+// Task to run PsdColorSeparator
+task runColorSeparator(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.electrosaur.trapper.PsdColorSeparator'
+    if (project.hasProperty('psdFile')) {
+        args project.property('psdFile')
+    }
+}
+
+// Task to run TestFileGenerator
+task generateTestFile(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.electrosaur.trapper.TestFileGenerator'
+    if (project.hasProperty('testName')) {
+        args project.property('testName')
+    }
+    if (project.hasProperty('width') && project.hasProperty('height')) {
+        args project.property('width'), project.property('height')
+    }
+}
 
