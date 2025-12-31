@@ -15,6 +15,9 @@ bin/
 *.tif
 *.tiff
 
+# Exception: Include test resource files
+!src/test/resources/*.psd
+
 # OS
 .DS_Store
 Thumbs.db
