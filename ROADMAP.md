@@ -35,12 +35,12 @@ Build the **first open-source, dual-purpose color trapping tool** that serves bo
 - High-precision commercial printing (0.003" to 1/32" traps)
 - 3000 DPI film output workflows
 
-### ❌ Critical Issues for Screen Printing
-1. **Wrong trap direction**: Light→Dark (should be Dark→Light)
+### ❌ Missing Features for Screen Printing
+1. ✅ **Trap direction**: Now correct (light expands under dark - same as offset)
 2. **Missing underbase generation**: Essential for dark garments
 3. **Missing underbase choke**: White layer must be 2-4 points smaller
-4. **Wrong units**: Only fractional inches (needs point-based: "2pt", "4pt")
-5. **Wrong trap sizes**: Too small (0-1/32" vs. needed 2-6 points)
+4. ✅ **Point-based units**: Now supports "2pt", "4pt", "6pt" measurements
+5. **Larger trap sizes needed**: Screen printing typically uses 2-6 points vs 0-1/32" for offset
 6. **Missing film positives**: No 1-bit TIFF output per layer
 7. **Missing halftones**: No 45-65 LPI screen support
 8. **Missing registration marks**: Essential for multi-color alignment
@@ -72,8 +72,9 @@ Build the **first open-source, dual-purpose color trapping tool** that serves bo
 ```
 PsdColorSeparator (main entry point)
 ├── TrappingStrategy interface
-│   ├── OffsetTrappingStrategy (light spreads into dark)
-│   └── ScreenPrintingTrappingStrategy (dark traps over light)
+│   ├── AbstractTrappingStrategy (shared logic: light expands under dark)
+│   ├── OffsetTrappingStrategy (extends AbstractTrappingStrategy)
+│   └── ScreenPrintingTrappingStrategy (extends AbstractTrappingStrategy)
 ├── UnderbaseGenerator (screen printing only)
 │   ├── generateUnderbase() - creates white layer
 │   └── chokeUnderbase() - morphological erosion
@@ -113,13 +114,15 @@ PsdColorSeparator (main entry point)
 
 - [ ] Implement `OffsetTrappingStrategy`
   - Move existing `calculateExpansion()` logic here
-  - Lightest layer gets maximum trap
-  - Linear interpolation light→dark
+  - Lightest layer gets maximum trap (expands underneath)
+  - Darkest layer gets minimum trap (defines edges)
+  - Linear interpolation: lighter → more trap, darker → less trap
 
 - [ ] Implement `ScreenPrintingTrappingStrategy`
-  - **REVERSE LOGIC**: Darkest layer gets maximum trap
-  - Linear interpolation dark→light
-  - Formula: `ratio = (totalLayers - 1 - layerIndex) / (totalLayers - 1)`
+  - **SAME LOGIC as offset**: Lightest layer gets maximum trap
+  - Light layers expand underneath, dark layers trap on top
+  - "Dark traps over light" is achieved by expanding light layers
+  - Both strategies use identical trap calculation (can diverge in future)
 
 - [ ] Add `--mode` parameter
   - `offset` (default, maintains backward compatibility)
@@ -127,12 +130,13 @@ PsdColorSeparator (main entry point)
 
 - [ ] Add integration tests
   - Test offset mode produces same results as before
-  - Test screen mode reverses trap direction correctly
+  - Test screen mode uses same trap calculation as offset
+  - Verify both modes: light layers expand, dark layers trap on top
 
 **Success Criteria**:
 - ✅ All existing tests pass
 - ✅ Offset mode produces identical output to current version
-- ✅ Screen mode reverses trap direction (verified manually)
+- ✅ Screen mode uses correct trap direction (light expands under dark)
 - ✅ No breaking changes to existing API
 
 ---

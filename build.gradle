@@ -41,6 +41,17 @@ task runColorSeparator(type: JavaExec) {
     mainClass = 'org.electrosaur.trapper.PsdColorSeparator'
     if (project.hasProperty('psdFile')) {
         args project.property('psdFile')
+
+        // Optional parameters: minTrap, maxTrap, mode
+        if (project.hasProperty('minTrap')) {
+            args project.property('minTrap')
+        }
+        if (project.hasProperty('maxTrap')) {
+            args project.property('maxTrap')
+        }
+        if (project.hasProperty('mode')) {
+            args project.property('mode')
+        }
     }
 }
 

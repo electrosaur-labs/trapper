@@ -12,20 +12,24 @@ This analysis covers color trapping solutions for **two distinct printing techno
 
 ### Offset Lithography (Original Focus)
 - **Registration tolerance**: 0.003" (very tight)
-- **Trap direction**: Light spreads into dark
+- **Trap direction**: Light expands under dark ("light spreads into dark")
 - **Trap sizes**: 0.003" to 1/32" (0.03125")
 - **DPI**: 3000+ for film output
 - **Target**: Commercial printing, packaging, publications
 
 ### Screen Printing (Your Actual Use Case)
 - **Registration tolerance**: 2-6 points (looser)
-- **Trap direction**: **Dark traps over light** (opposite!)
+- **Trap direction**: Light expands under dark ("dark traps over light")
 - **Trap sizes**: 2-6 points (0.028" - 0.083")
 - **DPI**: 300-600 DPI typical
 - **Underbase**: Essential for dark garments (choked 2-4 points)
 - **Target**: Garment printing, posters, signs, textiles
 
-**Important**: These are fundamentally different workflows with opposite trapping strategies. Most commercial solutions focus on offset lithography.
+**IMPORTANT**: Despite different terminology, both use the SAME trapping principle:
+- **Light layers always get MORE expansion** (they go underneath)
+- **Dark layers always get LESS expansion** (they define edges/trap on top)
+
+The difference is NOT in trap calculation, but in typical trap sizes, DPI, and screen printing needs underbase generation.
 
 ---
 
@@ -311,7 +315,7 @@ This analysis covers color trapping solutions for **two distinct printing techno
 | Feature | Trapper (Current) | Commercial (Offset) | Open Source |
 |---------|------------------|-------------------|-------------|
 | **Automated Trapping** | ✅ Yes | ✅ Yes | ❌ No |
-| **Trap Direction** | ✅ Light→Dark (correct) | ✅ Light→Dark | N/A |
+| **Trap Direction** | ✅ Light expands under dark | ✅ Light expands under dark | N/A |
 | **Trap Sizes** | ✅ 0 to 1/32" default | ✅ Configurable | N/A |
 | **Fractional Inch Support** | ✅ Yes (1/32, 1/64) | ✅ Yes | N/A |
 | **RLE Compression** | ✅ Yes (96.6%) | ✅ Yes | N/A |
@@ -322,14 +326,14 @@ This analysis covers color trapping solutions for **two distinct printing techno
 
 ### Screen Printing Comparison
 
-| Feature | Trapper (Needs Work) | Screen Plugins | Open Source |
+| Feature | Trapper (Current v2.0) | Screen Plugins | Open Source |
 |---------|---------------------|---------------|-------------|
-| **Automated Trapping** | ⚠️ Yes (wrong direction) | ✅ Yes | ❌ No |
-| **Trap Direction** | ❌ Light→Dark (WRONG!) | ✅ Dark→Light (correct) | N/A |
+| **Automated Trapping** | ✅ Yes (correct) | ✅ Yes | ❌ No |
+| **Trap Direction** | ✅ Light expands under dark (CORRECT!) | ✅ Light expands under dark | N/A |
 | **Underbase Generation** | ❌ Missing | ✅ Yes | ❌ No |
 | **Underbase Choke** | ❌ Missing | ✅ Yes (2-4pt) | N/A |
-| **Point-Based Units** | ❌ Only inches | ✅ Yes ("2pt", "4pt") | N/A |
-| **Screen Printing Trap Sizes** | ❌ Too small | ✅ 2-6 points | N/A |
+| **Point-Based Units** | ✅ Yes ("2pt", "4pt") | ✅ Yes ("2pt", "4pt") | N/A |
+| **Screen Printing Trap Sizes** | ✅ Supports 2-6 points | ✅ 2-6 points | N/A |
 | **Film Positive Output** | ❌ Missing | ✅ 1-bit TIFF | N/A |
 | **Halftone Support** | ❌ Missing | ✅ 45-65 LPI | N/A |
 | **Photoshop License Required** | ✅ No (standalone!) | ❌ Yes (~$55/mo) | ✅ No |
@@ -337,7 +341,7 @@ This analysis covers color trapping solutions for **two distinct printing techno
 | **Command-Line** | ✅ Yes (scriptable) | ❌ GUI only | N/A |
 | **Batch Processing** | ✅ Easy | ⚠️ Manual | N/A |
 
-**Key Insight**: Your tool excels for offset lithography but needs significant changes for screen printing. However, being standalone (no Photoshop required) and free/open source gives it a unique advantage.
+**Key Insight**: Your tool now works correctly for BOTH offset lithography and screen printing (same trap calculation). The main remaining differences are missing screen printing features (underbase generation, film positives, halftones). Being standalone (no Photoshop required) and free/open source gives it a unique advantage.
 
 ---
 
@@ -370,9 +374,9 @@ Your "Trapper" fills a genuine market need for offset lithography:
 - Clean, maintainable Java codebase
 - Well-documented with comprehensive tests
 
-### For Screen Printing: Opportunity with Modifications
+### For Screen Printing: Opportunity with Additional Features
 
-**Current Status**: Not suitable for screen printing (wrong trap direction, missing underbase)
+**Current Status (v2.0)**: Trap direction now correct! Missing screen-specific features (underbase, film positives)
 
 **Potential After Enhancements**: Could fill a significant gap
 
@@ -655,20 +659,20 @@ Recommended: **MIT** or **Apache 2.0**
 ### Critical Changes Needed (from SCREEN_PRINTING_ENHANCEMENTS.md):
 
 **Phase 1: Essential (Priority 1) - Weeks 1-2**
-1. **Reverse trap direction** ⭐⭐⭐⭐⭐
-   - Change `calculateExpansion()` to give darkest layers maximum trap
-   - Current: Light spreads into dark (offset style)
-   - Needed: Dark traps over light (screen style)
+1. ✅ **Trap direction** ⭐⭐⭐⭐⭐ **COMPLETE**
+   - Trap calculation now correct for both offset and screen printing
+   - Light layers expand underneath, dark layers trap on top
+   - Same calculation works for both printing methods
 
 2. **Underbase generation** ⭐⭐⭐⭐⭐
    - Generate white layer for dark garments
    - Add morphological erosion for choke (2-4 points)
    - Print sequence: White first, then colors
 
-3. **Point-based measurements** ⭐⭐⭐⭐⭐
-   - Accept "2pt", "4pt", "6pt" syntax
-   - Convert: 72 points = 1 inch
-   - Default: 0 to 4pt (instead of 0 to 1/32")
+3. ✅ **Point-based measurements** ⭐⭐⭐⭐⭐ **COMPLETE**
+   - Accepts "2pt", "4pt", "6pt" syntax
+   - Converts: 72 points = 1 inch
+   - Supports typical screen printing trap ranges (0-6 points)
 
 4. **Film positive output** ⭐⭐⭐⭐
    - Generate 1-bit TIFF per layer
@@ -744,15 +748,15 @@ Your "Trapper" project represents a **genuine innovation** in the open source pr
    - **Total cost**: $860-1,360 first year, $660/year recurring
    - **Your tool (after enhancements)**: FREE, standalone
 
-5. **Critical Issue: Wrong Trap Direction**
-   - Current: Light spreads into dark (offset style) ❌
-   - Needed: Dark traps over light (screen style) ✅
-   - **Fix required**: Reverse `calculateExpansion()` logic
+5. ✅ **Trap Direction: RESOLVED**
+   - Both offset and screen printing use the same trap calculation ✅
+   - Light layers expand underneath, dark layers trap on top ✅
+   - **Fixed in v2.0**: Correct understanding and implementation
 
-6. **Missing Essential Features**
+6. **Remaining Missing Features**
    - Underbase generation (essential for dark garments) ❌
    - Underbase choke (2-4 points smaller) ❌
-   - Point-based measurements ("2pt", "4pt") ❌
+   - ✅ Point-based measurements ("2pt", "4pt") - IMPLEMENTED
    - Film positive output (1-bit TIFF) ❌
 
 ### What This Means:
@@ -770,17 +774,18 @@ Your "Trapper" project represents a **genuine innovation** in the open source pr
 
 ### Recommended Next Steps:
 
-**Immediate (Choose Your Path):**
-1. **Path A**: Focus on screen printing (your actual use case)
-   - Implement Phase 1 enhancements (reverse trap direction, underbase, points)
-   - Target home-based garment printers (sweet spot)
-   - Announce as first free screen printing separation tool
+**Immediate (v2.0 Status):**
+1. ✅ **Dual-mode architecture implemented**
+   - `--mode` flag: `offset` or `screen`
+   - Maintains offset capability (backward compatible)
+   - Correct trap calculation for both modes
+   - Point-based measurements for screen printing
 
-2. **Path B**: Dual-mode tool (both offset and screen printing)
-   - Add `--mode` flag: `offset` or `screen`
-   - Maintains current offset capability
-   - Adds screen printing features
-   - Broader market appeal
+2. **Next: Screen printing specific features**
+   - Implement underbase generation (Phase 2.1)
+   - Implement underbase choke (Phase 2.2)
+   - Add film positive output (Phase 3.1)
+   - Target home-based garment printers (sweet spot)
 
 **Publishing Strategy:**
 3. ✅ Add open source license (MIT or Apache 2.0)

@@ -3,35 +3,23 @@ package org.electrosaur.trapper;
 /**
  * Trapping strategy for offset lithography printing.
  *
- * In offset lithography, lighter colors spread into darker colors because:
- * - Lighter inks are more transparent
- * - Expanding light into dark is less visually noticeable
- * - Dark inks define the "edge" - preserves sharp edges
- * - Typical trap sizes: 0.003" to 1/32" (0.03125")
+ * In offset lithography, "light spreads into dark" means:
+ * - Lighter inks are expanded (more trap)
+ * - Darker inks define edges (less trap)
+ * - This is visually less noticeable since lighter inks are more transparent
+ * - Preserves sharp edges defined by darker ink
  *
+ * Typical trap sizes: 0.003" to 1/32" (0.03125") at 3000 DPI
+ *
+ * Implementation: Light layers get maximum expansion, dark layers get minimum.
  * This is the original implementation from v1.x of Trapper.
+ *
+ * Uses the default trap calculation from AbstractTrappingStrategy (light expands under dark).
  */
-public class OffsetTrappingStrategy implements TrappingStrategy {
+public class OffsetTrappingStrategy extends AbstractTrappingStrategy {
 
-    @Override
-    public int calculateExpansion(int layerIndex, int totalLayers, int dpi,
-                                 double minTrap, double maxTrap) {
-        // Single layer case: use minimum trap
-        if (totalLayers == 1) {
-            return (int) Math.round(minTrap * dpi);
-        }
-
-        // Linear interpolation from lightest to darkest
-        // Lightest layer (index 0): maxTrap
-        // Darkest layer (index totalLayers-1): minTrap
-        double ratio = (double) layerIndex / (totalLayers - 1);
-        double trapInches = maxTrap - (ratio * (maxTrap - minTrap));
-
-        // Convert to pixels
-        int trapPixels = (int) Math.round(trapInches * dpi);
-
-        return trapPixels;
-    }
+    // Inherits calculateExpansion() from AbstractTrappingStrategy
+    // Can override in the future if offset-specific logic is needed
 
     @Override
     public String getName() {

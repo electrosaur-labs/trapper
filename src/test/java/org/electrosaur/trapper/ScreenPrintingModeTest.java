@@ -149,10 +149,11 @@ public class ScreenPrintingModeTest {
     }
 
     @Test
-    public void testTrapDirection_ReversedForScreenPrinting() {
-        // Test that trap calculations are reversed
-        // In offset: lightest layer gets max trap
-        // In screen: darkest layer gets max trap
+    public void testTrapDirection_SameAsOffset() {
+        // "Dark traps over light" means we EXPAND light layers (so dark can cover them)
+        // Therefore, screen printing uses the SAME trap calculation as offset:
+        // - Lightest layer gets maximum expansion (goes underneath)
+        // - Darkest layer gets minimum expansion (traps on top)
 
         int dpi = 300; // Typical screen printing DPI
         double minTrap = 0.0;
@@ -161,27 +162,26 @@ public class ScreenPrintingModeTest {
         // Test with 3 layers (indices 0, 1, 2)
         int totalLayers = 3;
 
-        // Offset strategy: lightest (index 0) should get max trap
+        // Both strategies: lightest (index 0) should get max trap
         int offsetLight = OFFSET_STRATEGY.calculateExpansion(0, totalLayers, dpi, minTrap, maxTrap);
         int offsetMid = OFFSET_STRATEGY.calculateExpansion(1, totalLayers, dpi, minTrap, maxTrap);
         int offsetDark = OFFSET_STRATEGY.calculateExpansion(2, totalLayers, dpi, minTrap, maxTrap);
 
-        // Screen strategy: darkest (index 2) should get max trap
         int screenLight = SCREEN_STRATEGY.calculateExpansion(0, totalLayers, dpi, minTrap, maxTrap);
         int screenMid = SCREEN_STRATEGY.calculateExpansion(1, totalLayers, dpi, minTrap, maxTrap);
         int screenDark = SCREEN_STRATEGY.calculateExpansion(2, totalLayers, dpi, minTrap, maxTrap);
 
-        // Verify offset: light > mid > dark
+        // Verify both: light > mid > dark
         assertTrue("Offset: lightest should have most trap", offsetLight > offsetMid);
         assertTrue("Offset: mid should have more trap than dark", offsetMid > offsetDark);
 
-        // Verify screen: dark > mid > light (REVERSED)
-        assertTrue("Screen: darkest should have most trap", screenDark > screenMid);
-        assertTrue("Screen: mid should have more trap than light", screenMid > screenLight);
+        assertTrue("Screen: lightest should have most trap", screenLight > screenMid);
+        assertTrue("Screen: mid should have more trap than dark", screenMid > screenDark);
 
-        // Verify they're actually reversed relative to each other
-        assertTrue("Screen lightest should match offset darkest", screenLight == offsetDark);
-        assertTrue("Screen darkest should match offset lightest", screenDark == offsetLight);
+        // Verify trap calculations are identical between strategies
+        assertEquals("Screen lightest should match offset lightest", offsetLight, screenLight);
+        assertEquals("Screen mid should match offset mid", offsetMid, screenMid);
+        assertEquals("Screen darkest should match offset darkest", offsetDark, screenDark);
     }
 
     @Test
@@ -312,10 +312,11 @@ public class ScreenPrintingModeTest {
         int twoLayersFirst = SCREEN_STRATEGY.calculateExpansion(0, 2, dpi, minTrap, maxTrap);
         int twoLayersSecond = SCREEN_STRATEGY.calculateExpansion(1, 2, dpi, minTrap, maxTrap);
 
-        // In screen printing with 2 layers: lightest (0) gets min, darkest (1) gets max
-        assertEquals("First of two layers should get min trap",
-                     (int)Math.round(minTrap * dpi), twoLayersFirst);
-        assertEquals("Second of two layers should get max trap",
-                     (int)Math.round(maxTrap * dpi), twoLayersSecond);
+        // In screen printing with 2 layers: lightest (0) gets MAX, darkest (1) gets MIN
+        // This allows dark to trap over the expanded light layer
+        assertEquals("First of two layers (lightest) should get max trap",
+                     (int)Math.round(maxTrap * dpi), twoLayersFirst);
+        assertEquals("Second of two layers (darkest) should get min trap",
+                     (int)Math.round(minTrap * dpi), twoLayersSecond);
     }
 }
