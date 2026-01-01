@@ -82,3 +82,12 @@ task readDpi(type: JavaExec) {
     }
 }
 
+// Task to read PSD metadata (dimensions, DPI, layers, colors)
+task psdInfo(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.electrosaur.trapper.PsdMetadataReader'
+    if (project.hasProperty('psdFile')) {
+        args project.property('psdFile')
+    }
+}
+

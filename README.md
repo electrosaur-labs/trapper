@@ -107,6 +107,43 @@ Trap sizes can be specified as:
 
 **Note**: Both modes use identical trap calculation (light layers expand under dark layers). The difference is only in terminology and typical trap sizes.
 
+### PSD File Information
+
+Inspect metadata from a PSD file:
+
+```bash
+./gradlew psdInfo -PpsdFile=input.psd
+```
+
+Output includes:
+- File size
+- Dimensions (width × height in pixels)
+- Resolution (DPI)
+- Physical size (in inches)
+- Number of layers
+- Number of distinct colors
+- Compression ratio
+
+Example output:
+```
+PSD File Information
+===================
+
+File:             JethroAsMonroe-1-layers.psd
+File Size:        69.40 MB
+
+Dimensions:       5700 × 3900 pixels
+Resolution:       300 DPI
+Physical Size:    19.00" × 13.00"
+
+Layers:           10
+Distinct Colors:  6
+
+Total Pixels:     22,230,000
+Uncompressed:     84.80 MB (RGBA)
+Compression:      1.2x (18.2% reduction)
+```
+
 ## How It Works
 
 1. **Read PSD**: Loads multi-layer PSD file and flattens to analyze colors
