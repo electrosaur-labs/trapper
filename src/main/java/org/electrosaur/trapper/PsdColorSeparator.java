@@ -403,7 +403,9 @@ public class PsdColorSeparator {
                 if (name.contains("Resolution") || name.contains("DPI") || name.contains("dpi")) {
                     try {
                         String value = attr.getNodeValue();
-                        return Integer.parseInt(value.replaceAll("[^0-9]", ""));
+                        // Parse as double first to handle decimals like "300.0"
+                        double dpiDouble = Double.parseDouble(value.replaceAll("[^0-9.]", ""));
+                        return (int) Math.round(dpiDouble);
                     } catch (NumberFormatException ignored) {
                     }
                 }

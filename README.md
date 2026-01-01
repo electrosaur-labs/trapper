@@ -1,6 +1,6 @@
-# Trapper - Color Trapping System for Offset Lithography
+# Trapper - Color Trapping System for Print Production
 
-A Java application that performs color trapping (also known as "choking" and "spreading") for multi-color offset lithography printing to compensate for misregistration between printing plates.
+A Java application that performs color trapping (also known as "choking" and "spreading") for multi-color printing to compensate for misregistration between printing plates. Supports both offset lithography and screen printing modes.
 
 ## Overview
 
@@ -30,35 +30,82 @@ Trapper reads Photoshop PSD files, separates colors into individual layers, and 
 
 ## Usage
 
-### Basic Usage (Default Trap Range: 0 to 1/32")
+### GUI Mode (Recommended)
+
+Launch the graphical user interface:
+
+```bash
+./gradlew runGUI
+```
+
+The GUI provides:
+- File browser for input/output PSD selection
+- Mode selection (Offset Lithography or Screen Printing)
+- Trap size inputs with unit selection (points/inches/fractions)
+- Progress bar and processing log
+- Mode-specific defaults:
+  - **Offset Lithography**: 0 to 1/32" at 3000 DPI
+  - **Screen Printing**: 0 to 4pt at 300-600 DPI
+
+### Command-Line Mode
+
+#### Basic Usage (Default Trap Range: 0 to 1/32", Offset Mode)
 
 ```bash
 ./gradlew runColorSeparator -PpsdFile=input.psd
 ```
 
-### Custom Trap Range with Fractions
+#### With Custom Trap Range and Mode
 
 ```bash
-java -cp build/libs/trapper.jar org.electrosaur.trapper.PsdColorSeparator input.psd 0 1/64
+# Offset lithography with custom range
+./gradlew runColorSeparator -PpsdFile=input.psd -PminTrap=0 -PmaxTrap=1/64 -Pmode=offset
+
+# Screen printing with point-based measurements
+./gradlew runColorSeparator -PpsdFile=input.psd -PminTrap=0 -PmaxTrap=4pt -Pmode=screen
 ```
 
-### Custom Trap Range with Decimals
+#### Direct Java Execution
 
 ```bash
-java -cp build/libs/trapper.jar org.electrosaur.trapper.PsdColorSeparator input.psd 0.015625 0.03125
+# Offset mode (default)
+java -cp build/libs/trapper.jar org.electrosaur.trapper.PsdColorSeparator input.psd 0 1/64
+
+# Screen printing mode
+java -cp build/libs/trapper.jar org.electrosaur.trapper.PsdColorSeparator input.psd 0 4pt screen
 ```
 
 ### Command-Line Arguments
 
 ```
-Usage: java PsdColorSeparator <input.psd> [minTrap] [maxTrap]
+Usage: java PsdColorSeparator <input.psd> [minTrap] [maxTrap] [mode]
   minTrap: minimum trap size (darkest layer, default: 0)
   maxTrap: maximum trap size (lightest layer, default: 1/32)
+  mode:    printing mode - "offset" or "screen" (default: offset)
 
 Trap sizes can be specified as:
   - Fractions: 1/32, 1/64, 1/16, etc.
   - Decimals: 0.03125, 0.015625, etc.
+  - Points: 2pt, 4pt, 6pt (1 point = 1/72 inch)
 ```
+
+### Printing Modes
+
+#### Offset Lithography
+- **Description**: High-precision commercial printing
+- **Trap Direction**: Light spreads into dark
+- **Typical Range**: 0 to 1/32" (0.03125")
+- **Typical DPI**: 3000 DPI
+- **Use Cases**: Commercial printing, magazines, packaging
+
+#### Screen Printing
+- **Description**: Garment printing, posters, textiles
+- **Trap Direction**: Dark traps over light
+- **Typical Range**: 0 to 6 points (0 to 0.083")
+- **Typical DPI**: 300-600 DPI
+- **Use Cases**: T-shirts, posters, signage
+
+**Note**: Both modes use identical trap calculation (light layers expand under dark layers). The difference is only in terminology and typical trap sizes.
 
 ## How It Works
 
@@ -165,12 +212,18 @@ While Photoshop can save multi-layer files in TIFF format using TIFF tag 37724 (
 ```
 src/
 ├── main/java/org/electrosaur/trapper/
-│   ├── PsdColorSeparator.java    # Main trapping engine
-│   ├── TestFileGenerator.java    # Generates test PSD files
-│   └── App.java                   # Simple multi-layer PSD demo
+│   ├── PsdColorSeparator.java            # Main trapping engine
+│   ├── TrapperGUI.java                   # Swing GUI interface
+│   ├── TrappingStrategy.java             # Strategy interface
+│   ├── AbstractTrappingStrategy.java     # Base strategy implementation
+│   ├── OffsetTrappingStrategy.java       # Offset lithography strategy
+│   ├── ScreenPrintingTrappingStrategy.java  # Screen printing strategy
+│   ├── TestFileGenerator.java            # Generates test PSD files
+│   └── App.java                           # Simple multi-layer PSD demo
 └── test/
     ├── java/org/electrosaur/trapper/
     │   ├── PsdColorSeparatorTest.java      # Unit tests (trap size parsing)
+    │   ├── ScreenPrintingModeTest.java     # Screen printing mode tests
     │   ├── TrappingIntegrationTest.java    # Integration tests
     │   ├── TestImageGenerator.java         # Test resource generator
     │   └── AppTest.java                     # Basic PSD creation test
@@ -226,7 +279,8 @@ Output PSD files contain:
 - [ ] Support for more than 10 colors
 - [ ] CMYK color mode support
 - [ ] Configurable dilation algorithm (8-connected neighbors)
-- [ ] GUI interface for parameter adjustment
+- [x] GUI interface for parameter adjustment (v2.0)
+- [x] Multiple printing mode support (v2.0)
 - [ ] Batch processing support
 - [ ] Preview generation
 

@@ -67,3 +67,18 @@ task generateTestFile(type: JavaExec) {
     }
 }
 
+// Task to run TrapperGUI
+task runGUI(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.electrosaur.trapper.TrapperGUI'
+}
+
+// Task to run PsdDpiReader
+task readDpi(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.electrosaur.trapper.PsdDpiReader'
+    if (project.hasProperty('psdFile')) {
+        args project.property('psdFile')
+    }
+}
+
