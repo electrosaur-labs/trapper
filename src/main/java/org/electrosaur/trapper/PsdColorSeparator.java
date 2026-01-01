@@ -42,21 +42,52 @@ public class PsdColorSeparator {
 
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("Usage: java PsdColorSeparator <input.psd> [minTrap] [maxTrap]");
+            System.err.println("Usage: java PsdColorSeparator <input.psd> [minTrap] [maxTrap] [mode]");
             System.err.println("  minTrap: minimum trap size (darkest layer, default: 0)");
-            System.err.println("  maxTrap: maximum trap size (lightest layer, default: 1/32)");
+            System.err.println("  maxTrap: maximum trap size (lightest layer, default: 1/32 for offset, 4pt for screen)");
+            System.err.println("  mode: trapping mode (default: offset)");
+            System.err.println("    - offset: Offset lithography (light spreads into dark)");
+            System.err.println("    - screen: Screen printing (dark traps over light)");
             System.err.println("  Trap sizes can be specified as:");
             System.err.println("    - Fractions: 1/32, 1/64, 1/16, etc.");
             System.err.println("    - Decimals: 0.03125, 0.015625, etc.");
+            System.err.println("    - Points: 2pt, 4pt, 6pt (screen printing)");
             System.exit(1);
         }
 
         String inputFile = args[0];
         String outputFile = generateOutputFilename(inputFile);
 
+        // Parse mode argument (optional, defaults to "offset")
+        String mode = "offset";
+        if (args.length >= 4) {
+            mode = args[3].toLowerCase();
+            if (!mode.equals("offset") && !mode.equals("screen")) {
+                System.err.println("Error: mode must be 'offset' or 'screen'");
+                System.exit(1);
+            }
+        }
+
+        // Select trapping strategy based on mode
+        TrappingStrategy strategy;
+        if (mode.equals("screen")) {
+            strategy = new ScreenPrintingTrappingStrategy();
+        } else {
+            strategy = new OffsetTrappingStrategy();
+        }
+
+        // Mode-specific default trap sizes
+        double defaultMinTrap = 0.0;
+        double defaultMaxTrap;
+        if (mode.equals("screen")) {
+            defaultMaxTrap = 4.0 / 72.0;  // 4 points in inches
+        } else {
+            defaultMaxTrap = DEFAULT_MAX_EXPANSION; // 1/32 inch
+        }
+
         // Parse optional trap size arguments
-        double minExpansion = DEFAULT_MIN_EXPANSION;
-        double maxExpansion = DEFAULT_MAX_EXPANSION;
+        double minExpansion = defaultMinTrap;
+        double maxExpansion = defaultMaxTrap;
 
         if (args.length >= 3) {
             try {
@@ -78,7 +109,7 @@ public class PsdColorSeparator {
         }
 
         try {
-            processFile(inputFile, outputFile, minExpansion, maxExpansion);
+            processFile(inputFile, outputFile, minExpansion, maxExpansion, strategy);
             System.out.println("Successfully created color-separated PSD: " + outputFile);
         } catch (Exception e) {
             System.err.println("Error processing PSD file: " + e.getMessage());
@@ -88,10 +119,25 @@ public class PsdColorSeparator {
     }
 
     /**
-     * Parses a trap size specification in either fractional (1/32) or decimal (0.03125) format
+     * Parses a trap size specification in fractional (1/32), decimal (0.03125), or point (4pt) format
      */
     private static double parseTrapSize(String spec) {
         spec = spec.trim();
+
+        // Check if it's a point specification (e.g., "2pt", "4pt", "6pt")
+        if (spec.toLowerCase().endsWith("pt")) {
+            try {
+                String pointStr = spec.substring(0, spec.length() - 2).trim();
+                double points = Double.parseDouble(pointStr);
+                if (points < 0) {
+                    throw new IllegalArgumentException("Points must be non-negative: " + spec);
+                }
+                // Convert points to inches: 72 points = 1 inch
+                return points / 72.0;
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid point format: " + spec + ". Use format like 2pt or 4pt");
+            }
+        }
 
         // Check if it's a fraction (e.g., "1/32")
         if (spec.contains("/")) {
@@ -114,7 +160,7 @@ public class PsdColorSeparator {
             try {
                 return Double.parseDouble(spec);
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("Invalid decimal format: " + spec + ". Use format like 0.03125 or 1/32");
+                throw new IllegalArgumentException("Invalid decimal format: " + spec + ". Use format like 0.03125, 1/32, or 4pt");
             }
         }
     }
@@ -149,13 +195,16 @@ public class PsdColorSeparator {
      * Main processing logic
      */
     public static void processFile(String inputFile, String outputFile,
-                                   double minExpansion, double maxExpansion) throws IOException {
+                                   double minExpansion, double maxExpansion,
+                                   TrappingStrategy strategy) throws IOException {
         // Step 1: Read and flatten the PSD, get DPI
         PsdInfo psdInfo = readAndFlattenPSD(inputFile);
         BufferedImage flattened = psdInfo.image;
         int dpi = psdInfo.dpi;
 
         System.out.println("Image DPI: " + dpi);
+        System.out.println("Trapping mode: " + strategy.getName());
+        System.out.println("Trap direction: " + strategy.getTrapDirection());
         System.out.printf("Trap range: %.6f\" to %.6f\" (1/%d\" to 1/%d\")%n",
             minExpansion, maxExpansion,
             minExpansion > 0 ? (int)Math.round(1.0 / minExpansion) : 0,
@@ -178,7 +227,7 @@ public class PsdColorSeparator {
 
         // Step 5: Create output PSD with color-separated layers and trapping
         List<LayerData> layers = createColorSeparatedLayers(flattened, sortedColors, dpi,
-                                                            minExpansion, maxExpansion);
+                                                            minExpansion, maxExpansion, strategy);
 
         // Step 6: Verify that flattening the trapped layers matches the original
         System.out.println("Verifying trapped output...");
@@ -437,28 +486,6 @@ public class PsdColorSeparator {
         return 0.299 * r + 0.587 * g + 0.114 * b;
     }
 
-    /**
-     * Calculates the expansion (trap size) in pixels for a given layer index
-     * Lightest layer (index 0): maxExpansion
-     * Darkest layer (index n-1): minExpansion
-     * Linear interpolation for layers in between
-     */
-    private static int calculateExpansion(int layerIndex, int totalLayers, int dpi,
-                                         double minExpansion, double maxExpansion) {
-        if (totalLayers == 1) {
-            // Single color: use minimum expansion
-            return (int) Math.round(minExpansion * dpi);
-        }
-
-        // Linear interpolation from lightest to darkest
-        double ratio = (double) layerIndex / (totalLayers - 1);
-        double expansionInches = maxExpansion - (ratio * (maxExpansion - minExpansion));
-
-        // Convert to pixels
-        int expansionPixels = (int) Math.round(expansionInches * dpi);
-
-        return expansionPixels;
-    }
 
     /**
      * Expands/dilates non-transparent pixels in an image by the specified radius
@@ -526,7 +553,8 @@ public class PsdColorSeparator {
      */
     private static List<LayerData> createColorSeparatedLayers(BufferedImage source,
                                                                List<Integer> sortedColors, int dpi,
-                                                               double minExpansion, double maxExpansion) {
+                                                               double minExpansion, double maxExpansion,
+                                                               TrappingStrategy strategy) {
         int width = source.getWidth();
         int height = source.getHeight();
 
@@ -651,7 +679,7 @@ public class PsdColorSeparator {
                 // If first color was white, adjust the expansion calculation
                 int adjustedIndex = firstColorIsWhite ? (layerIndex - 1) : layerIndex;
                 int adjustedTotal = firstColorIsWhite ? (sortedColors.size() - 1) : sortedColors.size();
-                int expansion = calculateExpansion(adjustedIndex, adjustedTotal, dpi, minExpansion, maxExpansion);
+                int expansion = strategy.calculateExpansion(adjustedIndex, adjustedTotal, dpi, minExpansion, maxExpansion);
                 System.out.printf("[Layer %d/%d] Expansion: %d pixels (%.4f inches)%n",
                     layerIndex + 1, sortedColors.size(), expansion, (double) expansion / dpi);
 

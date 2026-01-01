@@ -17,6 +17,7 @@ public class TrappingIntegrationTest {
     private static final String TEST_SIMPLE = "src/test/resources/test-simple.psd";
     private static final String TEST_COMPLEX = "src/test/resources/test-complex.psd";
     private static final double EPSILON = 0.0000001;
+    private static final TrappingStrategy OFFSET_STRATEGY = new OffsetTrappingStrategy();
 
     @Before
     public void setUp() throws IOException {
@@ -34,7 +35,7 @@ public class TrappingIntegrationTest {
         String outputFile = "build/test-output-simple-default.psd";
 
         // Run trapping with default range (0 to 1/32")
-        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 1.0/32.0);
+        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 1.0/32.0, OFFSET_STRATEGY);
 
         // Verify output file was created
         File output = new File(outputFile);
@@ -56,7 +57,7 @@ public class TrappingIntegrationTest {
         String outputFile = "build/test-output-simple-custom.psd";
 
         // Run trapping with custom range (0 to 1/64")
-        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 1.0/64.0);
+        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 1.0/64.0, OFFSET_STRATEGY);
 
         File output = new File(outputFile);
         assertTrue("Output file should exist", output.exists());
@@ -71,7 +72,7 @@ public class TrappingIntegrationTest {
         String outputFile = "build/test-output-complex-default.psd";
 
         // Run trapping with default range
-        PsdColorSeparator.processFile(TEST_COMPLEX, outputFile, 0.0, 1.0/32.0);
+        PsdColorSeparator.processFile(TEST_COMPLEX, outputFile, 0.0, 1.0/32.0, OFFSET_STRATEGY);
 
         File output = new File(outputFile);
         assertTrue("Output file should exist", output.exists());
@@ -92,7 +93,7 @@ public class TrappingIntegrationTest {
         String outputFile = "build/test-output-no-expansion.psd";
 
         // Run trapping with no expansion (0 to 0)
-        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 0.0);
+        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 0.0, OFFSET_STRATEGY);
 
         File output = new File(outputFile);
         assertTrue("Output file should exist", output.exists());
@@ -109,7 +110,7 @@ public class TrappingIntegrationTest {
         String outputFile = "build/test-output-minimal.psd";
 
         // Run trapping with minimal expansion (0 to 1/128")
-        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 1.0/128.0);
+        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 1.0/128.0, OFFSET_STRATEGY);
 
         File output = new File(outputFile);
         assertTrue("Output file should exist", output.exists());
@@ -124,7 +125,7 @@ public class TrappingIntegrationTest {
         String outputFile = "build/test-output-large.psd";
 
         // Run trapping with larger expansion (0 to 1/16")
-        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 1.0/16.0);
+        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 1.0/16.0, OFFSET_STRATEGY);
 
         File output = new File(outputFile);
         assertTrue("Output file should exist", output.exists());
@@ -139,7 +140,7 @@ public class TrappingIntegrationTest {
         String outputFile = "build/test-output-nonzero-min.psd";
 
         // Run trapping with non-zero minimum (1/64" to 1/32")
-        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 1.0/64.0, 1.0/32.0);
+        PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 1.0/64.0, 1.0/32.0, OFFSET_STRATEGY);
 
         File output = new File(outputFile);
         assertTrue("Output file should exist", output.exists());
@@ -157,7 +158,7 @@ public class TrappingIntegrationTest {
         // If verification fails, it would print errors but still complete
         // This test verifies no exceptions are thrown
         try {
-            PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 1.0/32.0);
+            PsdColorSeparator.processFile(TEST_SIMPLE, outputFile, 0.0, 1.0/32.0, OFFSET_STRATEGY);
 
             File output = new File(outputFile);
             assertTrue("Output file should exist after verification", output.exists());
@@ -175,8 +176,8 @@ public class TrappingIntegrationTest {
         String output2 = "build/test-output-consistent-2.psd";
 
         // Run trapping twice with same parameters
-        PsdColorSeparator.processFile(TEST_SIMPLE, output1, 0.0, 1.0/32.0);
-        PsdColorSeparator.processFile(TEST_SIMPLE, output2, 0.0, 1.0/32.0);
+        PsdColorSeparator.processFile(TEST_SIMPLE, output1, 0.0, 1.0/32.0, OFFSET_STRATEGY);
+        PsdColorSeparator.processFile(TEST_SIMPLE, output2, 0.0, 1.0/32.0, OFFSET_STRATEGY);
 
         File file1 = new File(output1);
         File file2 = new File(output2);
@@ -198,8 +199,8 @@ public class TrappingIntegrationTest {
         String outputLarge = "build/test-output-large-trap.psd";
 
         // Run trapping with different expansion amounts
-        PsdColorSeparator.processFile(TEST_SIMPLE, outputSmall, 0.0, 1.0/128.0);
-        PsdColorSeparator.processFile(TEST_SIMPLE, outputLarge, 0.0, 1.0/16.0);
+        PsdColorSeparator.processFile(TEST_SIMPLE, outputSmall, 0.0, 1.0/128.0, OFFSET_STRATEGY);
+        PsdColorSeparator.processFile(TEST_SIMPLE, outputLarge, 0.0, 1.0/16.0, OFFSET_STRATEGY);
 
         File fileSmall = new File(outputSmall);
         File fileLarge = new File(outputLarge);
@@ -223,7 +224,7 @@ public class TrappingIntegrationTest {
 
         // processFile generates output filename from input
         String outputFile = "build/out-test-simple.psd";
-        PsdColorSeparator.processFile(inputFile, outputFile, 0.0, 1.0/32.0);
+        PsdColorSeparator.processFile(inputFile, outputFile, 0.0, 1.0/32.0, OFFSET_STRATEGY);
 
         File output = new File(outputFile);
         assertTrue("Generated output file should exist", output.exists());
