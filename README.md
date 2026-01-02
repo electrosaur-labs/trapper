@@ -46,7 +46,7 @@ The GUI provides:
 - Trap size inputs with unit selection (points/inches/fractions)
 - Progress bar and processing log
 - Mode-specific defaults:
-  - **Offset Lithography**: 0 to 1/32" at 3000 DPI
+  - **Offset Lithography**: 0 to 1/32" at 300 DPI
   - **Screen Printing**: 0 to 4pt at 300-600 DPI
 
 ### Command-Line Mode
@@ -97,7 +97,7 @@ Trap sizes can be specified as:
 - **Description**: High-precision commercial printing
 - **Trap Direction**: Light spreads into dark
 - **Typical Range**: 0 to 1/32" (0.03125")
-- **Typical DPI**: 3000 DPI
+- **Typical DPI**: 300 DPI
 - **Use Cases**: Commercial printing, magazines, packaging
 
 #### Screen Printing
@@ -159,23 +159,23 @@ Compression:      1.2x (18.2% reduction)
 
 ### Trap Size Interpolation
 
-- **Lightest layer**: Maximum trap size (e.g., 1/32" = ~94 pixels at 3000 DPI)
+- **Lightest layer**: Maximum trap size (e.g., 1/32" = ~9 pixels at 300 DPI)
 - **Darkest layer**: Minimum trap size (e.g., 0" = defines edges)
 - **Middle layers**: Linear interpolation between min and max
 
 ### Example
 
-At 3000 DPI with default range (0 to 1/32"):
+At 300 DPI with default range (0 to 1/32"):
 - Layer 1 (white): 0 pixels (no trapping needed - optimization)
-- Layer 2 (lightest color): 94 pixels (0.0313")
-- Layer 3: 71 pixels (0.0237")
-- Layer 4: 47 pixels (0.0157")
-- Layer 5: 24 pixels (0.0080")
+- Layer 2 (lightest color): 9 pixels (0.0300")
+- Layer 3: 7 pixels (0.0233")
+- Layer 4: 5 pixels (0.0167")
+- Layer 5: 2 pixels (0.0067")
 - Layer 6 (darkest): 0 pixels (defines edges)
 
 ## Performance
 
-Results from 5700×3900 pixel image at 3000 DPI:
+Results from 5700×3900 pixel image at 300 DPI:
 
 - **File Size Reduction**: 827 MB → 28 MB (96.6% reduction with RLE compression)
 - **Processing Time**: ~2.5 minutes on 16-core CPU (vs ~8 minutes single-threaded)
