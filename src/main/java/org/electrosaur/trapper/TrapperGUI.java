@@ -318,10 +318,18 @@ public class TrapperGUI extends JFrame {
         try {
             // Read PSD using ImageIO with TwelveMonkeys
             ImageInputStream iis = ImageIO.createImageInputStream(file);
+            if (iis == null) {
+                resetMetadata();
+                metadataDimensionsLabel.setText("Cannot read file");
+                return;
+            }
+
             Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
 
             if (!readers.hasNext()) {
                 resetMetadata();
+                metadataDimensionsLabel.setText("Not a valid PSD file");
+                iis.close();
                 return;
             }
 
@@ -364,8 +372,16 @@ public class TrapperGUI extends JFrame {
             reader.dispose();
             iis.close();
 
+        } catch (java.io.IOException e) {
+            // If metadata reading fails, show specific error
+            resetMetadata();
+            if (e.getMessage() != null && e.getMessage().contains("permission")) {
+                metadataDimensionsLabel.setText("Permission denied");
+            } else {
+                metadataDimensionsLabel.setText("Cannot read file");
+            }
         } catch (Exception e) {
-            // If metadata reading fails, show error
+            // Generic error
             resetMetadata();
             metadataDimensionsLabel.setText("Error reading file");
         }
@@ -501,8 +517,68 @@ public class TrapperGUI extends JFrame {
 
         File inputFile = new File(inputPath);
         if (!inputFile.exists()) {
-            showError("Input file does not exist: " + inputPath);
+            showError("Input file does not exist:\n" + inputPath);
             return;
+        }
+
+        // Validate input file is readable
+        if (!inputFile.canRead()) {
+            showError("Cannot read input file (permission denied):\n" + inputPath);
+            return;
+        }
+
+        // Validate input file extension
+        if (!inputPath.toLowerCase().endsWith(".psd")) {
+            int result = JOptionPane.showConfirmDialog(this,
+                "Input file does not have .psd extension.\n" +
+                "File: " + inputFile.getName() + "\n\n" +
+                "Continue anyway?",
+                "Warning",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+            if (result != JOptionPane.YES_OPTION) {
+                return;
+            }
+        }
+
+        // Validate input file size (warn if > 500 MB)
+        long fileSizeMB = inputFile.length() / (1024 * 1024);
+        if (fileSizeMB > 500) {
+            int result = JOptionPane.showConfirmDialog(this,
+                String.format("Input file is very large (%d MB).\n" +
+                "Processing may take several minutes and require significant memory.\n\n" +
+                "Continue anyway?", fileSizeMB),
+                "Large File Warning",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+            if (result != JOptionPane.YES_OPTION) {
+                return;
+            }
+        }
+
+        // Validate output directory exists and is writable
+        File outputFile = new File(outputPath);
+        File outputDir = outputFile.getParentFile();
+        if (outputDir != null && !outputDir.exists()) {
+            showError("Output directory does not exist:\n" + outputDir.getAbsolutePath());
+            return;
+        }
+        if (outputDir != null && !outputDir.canWrite()) {
+            showError("Cannot write to output directory (permission denied):\n" + outputDir.getAbsolutePath());
+            return;
+        }
+
+        // Warn if output file already exists
+        if (outputFile.exists()) {
+            int result = JOptionPane.showConfirmDialog(this,
+                "Output file already exists:\n" + outputFile.getName() + "\n\n" +
+                "Overwrite?",
+                "Confirm Overwrite",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+            if (result != JOptionPane.YES_OPTION) {
+                return;
+            }
         }
 
         // Parse trap sizes
@@ -584,9 +660,17 @@ public class TrapperGUI extends JFrame {
                     progressBar.setIndeterminate(false);
                     progressBar.setValue(0);
                     progressBar.setString("Error");
+
+                    // Extract root cause
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    String errorMessage = cause.getMessage();
+
                     log("");
-                    log("✗ Error: " + e.getMessage());
-                    showError("Processing failed: " + e.getMessage());
+                    log("✗ Error: " + errorMessage);
+
+                    // Provide user-friendly error messages based on error type
+                    String userMessage = formatErrorMessage(cause, errorMessage);
+                    showError(userMessage);
                 } finally {
                     processButton.setEnabled(true);
                 }
@@ -639,6 +723,81 @@ public class TrapperGUI extends JFrame {
     private void log(String message) {
         logArea.append(message + "\n");
         logArea.setCaretPosition(logArea.getDocument().getLength());
+    }
+
+    /**
+     * Format error messages to be user-friendly based on error type
+     */
+    private String formatErrorMessage(Throwable cause, String errorMessage) {
+        // Out of memory errors
+        if (cause instanceof OutOfMemoryError ||
+            (errorMessage != null && errorMessage.toLowerCase().contains("out of memory"))) {
+            return "Out of Memory Error\n\n" +
+                   "The file is too large to process with available memory.\n\n" +
+                   "Solutions:\n" +
+                   "• Close other applications to free up memory\n" +
+                   "• Use a smaller input file\n" +
+                   "• Increase Java heap size with: java -Xmx4G -jar trapper.jar";
+        }
+
+        // Too many colors error
+        if (errorMessage != null && errorMessage.contains("more than 10 distinct colors")) {
+            return "Too Many Colors\n\n" +
+                   "The image contains more than 10 distinct colors.\n" +
+                   "Trapper currently supports a maximum of 10 colors.\n\n" +
+                   "Solutions:\n" +
+                   "• Reduce the number of colors in Photoshop\n" +
+                   "• Use Image → Mode → Indexed Color to limit colors\n" +
+                   "• Manually merge similar colors";
+        }
+
+        // File not found or I/O errors
+        if (cause instanceof java.io.FileNotFoundException) {
+            return "File Not Found\n\n" +
+                   "Could not find the input file.\n" +
+                   "It may have been moved or deleted.\n\n" +
+                   "Error: " + errorMessage;
+        }
+
+        // Generic I/O errors
+        if (cause instanceof java.io.IOException) {
+            String msg = "File Read/Write Error\n\n";
+
+            if (errorMessage != null) {
+                if (errorMessage.toLowerCase().contains("no space left")) {
+                    msg += "Disk is full - cannot write output file.\n\n" +
+                           "Free up disk space and try again.";
+                } else if (errorMessage.toLowerCase().contains("permission denied") ||
+                           errorMessage.toLowerCase().contains("access denied")) {
+                    msg += "Permission denied - cannot access file.\n\n" +
+                           "Check file permissions and try again.";
+                } else if (errorMessage.toLowerCase().contains("no reader found")) {
+                    msg += "Invalid or corrupted PSD file.\n\n" +
+                           "The file may not be a valid Photoshop PSD file,\n" +
+                           "or it may be corrupted.\n\n" +
+                           "Try opening it in Photoshop and saving it again.";
+                } else {
+                    msg += "Could not read or write file.\n\n" +
+                           "Error: " + errorMessage;
+                }
+            }
+            return msg;
+        }
+
+        // Invalid argument errors (trap sizes, etc)
+        if (cause instanceof IllegalArgumentException) {
+            return "Invalid Input\n\n" + errorMessage;
+        }
+
+        // Generic error with full message
+        if (errorMessage != null && !errorMessage.isEmpty()) {
+            return "Processing Error\n\n" + errorMessage;
+        }
+
+        // Unknown error
+        return "An unexpected error occurred.\n\n" +
+               "Error type: " + cause.getClass().getSimpleName() + "\n\n" +
+               "Please check the log for details or report this issue on GitHub.";
     }
 
     private void showError(String message) {
