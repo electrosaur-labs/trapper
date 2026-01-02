@@ -24,11 +24,32 @@ Trapper reads Photoshop PSD files, separates colors into individual layers, and 
 - Java 21+
 - Gradle 8.5+
 
-## Building
+## Download (For Non-Technical Users)
+
+If you don't have Java/Gradle installed or prefer a simpler option:
+
+1. Download the latest release JAR file: `trapper-2.0-all.jar`
+2. Ensure you have Java 21+ installed ([download here](https://adoptium.net/))
+3. Double-click the JAR file to launch the GUI, or run:
+   ```bash
+   java -jar trapper-2.0-all.jar
+   ```
+
+## Building from Source
+
+For developers who want to build from source:
 
 ```bash
 ./gradlew build
 ```
+
+To create the standalone executable JAR:
+
+```bash
+./gradlew shadowJar
+```
+
+This creates `build/libs/trapper-2.0-all.jar` - a single file containing all dependencies.
 
 ## Usage
 
@@ -36,6 +57,12 @@ Trapper reads Photoshop PSD files, separates colors into individual layers, and 
 
 Launch the graphical user interface:
 
+**If using the standalone JAR:**
+```bash
+java -jar trapper-2.0-all.jar
+```
+
+**If building from source:**
 ```bash
 ./gradlew runGUI
 ```
