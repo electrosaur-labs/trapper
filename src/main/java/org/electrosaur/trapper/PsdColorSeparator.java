@@ -197,10 +197,11 @@ public class PsdColorSeparator {
     public static void processFile(String inputFile, String outputFile,
                                    double minExpansion, double maxExpansion,
                                    TrappingStrategy strategy) throws IOException {
-        // Step 1: Read and flatten the PSD, get DPI
+        // Step 1: Read and flatten the PSD, get DPI and existing metadata
         PsdInfo psdInfo = readAndFlattenPSD(inputFile);
         BufferedImage flattened = psdInfo.image;
         int dpi = psdInfo.dpi;
+        String originalMetadata = psdInfo.copyrightMetadata;
 
         System.out.println("Image DPI: " + dpi);
         System.out.println("Trapping mode: " + strategy.getName());
@@ -236,9 +237,9 @@ public class PsdColorSeparator {
         BufferedImage trappedFlattened = flattenLayers(layers, width, height);
         verifyFlattening(flattened, trappedFlattened);
 
-        // Step 7: Write the PSD file
+        // Step 7: Write the PSD file with preserved metadata
         System.out.println("Writing output PSD file...");
-        writePSD(outputFile, width, height, layers);
+        writePSD(outputFile, width, height, layers, originalMetadata);
         System.out.println("Output file written.");
     }
 
@@ -338,10 +339,12 @@ public class PsdColorSeparator {
     private static class PsdInfo {
         BufferedImage image;
         int dpi;
+        String copyrightMetadata;
 
-        PsdInfo(BufferedImage image, int dpi) {
+        PsdInfo(BufferedImage image, int dpi, String copyrightMetadata) {
             this.image = image;
             this.dpi = dpi;
+            this.copyrightMetadata = copyrightMetadata;
         }
     }
 
@@ -377,10 +380,114 @@ public class PsdColorSeparator {
                 System.out.println("Could not read DPI from metadata, using default: " + dpi);
             }
 
+            // Try to extract XMP metadata from Image Resources
+            String copyrightMetadata = extractXMPFromPSD(file);
+            if (copyrightMetadata != null) {
+                System.out.println("Found existing XMP metadata in input file");
+            }
+
             reader.dispose();
 
             System.out.println("Read PSD: " + image.getWidth() + "x" + image.getHeight());
-            return new PsdInfo(image, dpi);
+            return new PsdInfo(image, dpi, copyrightMetadata);
+        }
+    }
+
+    /**
+     * Extracts XMP metadata (Resource 1060) from a PSD file
+     * Returns the XMP string or null if not found
+     */
+    private static String extractXMPFromPSD(File psdFile) {
+        try (RandomAccessFile raf = new RandomAccessFile(psdFile, "r");
+             FileChannel channel = raf.getChannel()) {
+
+            // Read file header (26 bytes)
+            ByteBuffer header = ByteBuffer.allocate(26);
+            int bytesRead = channel.read(header);
+            if (bytesRead < 26) {
+                return null;
+            }
+            header.flip();
+
+            // Check signature
+            byte[] sig = new byte[4];
+            header.get(sig);
+            if (!new String(sig).equals("8BPS")) {
+                return null;
+            }
+
+            // Skip version (2) and reserved (6)
+            header.position(header.position() + 8);
+
+            // Skip file info (14 bytes: channels, height, width, bits, color mode)
+            header.position(header.position() + 14);
+
+            // Read Color Mode Data Section length and skip it
+            ByteBuffer colorModeLength = ByteBuffer.allocate(4);
+            channel.read(colorModeLength);
+            colorModeLength.flip();
+            int colorModeDataLen = colorModeLength.getInt();
+            channel.position(channel.position() + colorModeDataLen);
+
+            // Read Image Resources Section
+            ByteBuffer resourcesLength = ByteBuffer.allocate(4);
+            channel.read(resourcesLength);
+            resourcesLength.flip();
+            int resourcesLen = resourcesLength.getInt();
+
+            if (resourcesLen == 0) {
+                return null;
+            }
+
+            // Read all resources
+            ByteBuffer resourcesData = ByteBuffer.allocate(resourcesLen);
+            channel.read(resourcesData);
+            resourcesData.flip();
+
+            // Parse resources looking for 1060 (XMP metadata)
+            while (resourcesData.remaining() >= 12) {
+                byte[] resSig = new byte[4];
+                resourcesData.get(resSig);
+                String sigStr = new String(resSig, "ISO-8859-1");
+                if (!sigStr.equals("8BIM")) {
+                    break;
+                }
+
+                int resourceId = resourcesData.getShort() & 0xFFFF;
+
+                // Read name (Pascal string or short 0)
+                int nameField = resourcesData.getShort() & 0xFFFF;
+
+                if (resourcesData.remaining() < 4) {
+                    break;
+                }
+
+                int dataSize = resourcesData.getInt();
+
+                if (resourcesData.remaining() < dataSize) {
+                    break;
+                }
+
+                if (resourceId == 1060) {
+                    // Found XMP metadata
+                    byte[] data = new byte[dataSize];
+                    resourcesData.get(data);
+                    return new String(data, "UTF-8").trim();
+                } else {
+                    // Skip this resource's data
+                    resourcesData.position(resourcesData.position() + dataSize);
+                }
+
+                // Resources are padded to even byte boundaries
+                if ((dataSize & 1) == 1 && resourcesData.hasRemaining()) {
+                    resourcesData.get();
+                }
+            }
+
+            return null;
+        } catch (Exception e) {
+            // If we can't read metadata, just return null and continue
+            return null;
         }
     }
 
@@ -849,10 +956,122 @@ public class PsdColorSeparator {
     }
 
     /**
-     * Writes a multi-layer PSD file
+     * Creates XMP metadata (Resource 1060) preserving original and adding processing history
+     * If original metadata exists, it's preserved as-is and we add a processing history entry
+     * If no original metadata, we just add a minimal processing note
+     */
+    private static byte[] createXMPMetadata(String originalMetadata) {
+        // If there's original metadata, preserve it and inject history
+        if (originalMetadata != null && !originalMetadata.trim().isEmpty()) {
+            String trimmed = originalMetadata.trim();
+
+            // Find the closing </rdf:RDF> tag to inject our history before it
+            int rdfEndIndex = trimmed.lastIndexOf("</rdf:RDF>");
+            if (rdfEndIndex > 0) {
+                StringBuilder result = new StringBuilder();
+                result.append(trimmed.substring(0, rdfEndIndex));
+
+                // Add processing history as a separate Description block
+                result.append("    <rdf:Description rdf:about=\"\"\n");
+                result.append("        xmlns:xmpMM=\"http://ns.adobe.com/xap/1.0/mm/\"\n");
+                result.append("        xmlns:stEvt=\"http://ns.adobe.com/xap/1.0/sType/ResourceEvent#\">\n");
+                result.append("      <xmpMM:History>\n");
+                result.append("        <rdf:Seq>\n");
+                result.append("          <rdf:li rdf:parseType=\"Resource\">\n");
+                result.append("            <stEvt:action>trapped</stEvt:action>\n");
+                result.append("            <stEvt:softwareAgent>Trapper v2.0 (https://github.com/electrosaur-labs/trapper)</stEvt:softwareAgent>\n");
+                result.append("            <stEvt:changed>/</stEvt:changed>\n");
+                result.append("          </rdf:li>\n");
+                result.append("        </rdf:Seq>\n");
+                result.append("      </xmpMM:History>\n");
+                result.append("    </rdf:Description>\n");
+
+                result.append(trimmed.substring(rdfEndIndex));
+
+                try {
+                    return result.toString().getBytes("UTF-8");
+                } catch (Exception e) {
+                    return result.toString().getBytes();
+                }
+            }
+        }
+
+        // No original metadata - create minimal XMP with just processing note
+        StringBuilder xmp = new StringBuilder();
+        xmp.append("<?xpacket begin=\"\ufeff\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n");
+        xmp.append("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"Trapper v2.0\">\n");
+        xmp.append("  <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n");
+        xmp.append("    <rdf:Description rdf:about=\"\"\n");
+        xmp.append("        xmlns:xmpMM=\"http://ns.adobe.com/xap/1.0/mm/\"\n");
+        xmp.append("        xmlns:stEvt=\"http://ns.adobe.com/xap/1.0/sType/ResourceEvent#\">\n");
+        xmp.append("      <xmpMM:History>\n");
+        xmp.append("        <rdf:Seq>\n");
+        xmp.append("          <rdf:li rdf:parseType=\"Resource\">\n");
+        xmp.append("            <stEvt:action>trapped</stEvt:action>\n");
+        xmp.append("            <stEvt:softwareAgent>Trapper v2.0 (https://github.com/electrosaur-labs/trapper)</stEvt:softwareAgent>\n");
+        xmp.append("            <stEvt:changed>/</stEvt:changed>\n");
+        xmp.append("          </rdf:li>\n");
+        xmp.append("        </rdf:Seq>\n");
+        xmp.append("      </xmpMM:History>\n");
+        xmp.append("    </rdf:Description>\n");
+        xmp.append("  </rdf:RDF>\n");
+        xmp.append("</x:xmpmeta>\n");
+
+        // Padding to make deterministic size (helps with test reproducibility)
+        int paddingNeeded = Math.max(0, 1024 - xmp.length() - 100);
+        for (int i = 0; i < paddingNeeded; i++) {
+            xmp.append(" ");
+        }
+
+        xmp.append("<?xpacket end=\"w\"?>");
+
+        try {
+            return xmp.toString().getBytes("UTF-8");
+        } catch (Exception e) {
+            return xmp.toString().getBytes();
+        }
+    }
+
+    /**
+     * Escapes XML special characters for XMP metadata
+     */
+    private static String escapeXML(String text) {
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;")
+                   .replace("'", "&apos;")
+                   .replace("\n", "&#xA;");
+    }
+
+    /**
+     * Writes an image resource block to PSD
+     * Resource ID 1034 is for Copyright/Creator metadata
+     */
+    private static void writeImageResourceBlock(DataOutputStream dos, int resourceId, byte[] data) throws IOException {
+        dos.writeBytes("8BIM");           // Signature
+        dos.writeShort(resourceId);       // Resource ID (1034 = Copyright)
+        dos.writeShort(0);                // Name (Pascal string, empty)
+
+        // Data size (must be even)
+        int dataSize = data.length;
+        if (dataSize % 2 != 0) {
+            dataSize++;  // Pad to even
+        }
+        dos.writeInt(dataSize);
+        dos.write(data);
+
+        // Add padding byte if needed
+        if (data.length % 2 != 0) {
+            dos.writeByte(0);
+        }
+    }
+
+    /**
+     * Writes a multi-layer PSD file with metadata
      */
     private static void writePSD(String filename, int width, int height,
-                                  List<LayerData> layers) throws IOException {
+                                  List<LayerData> layers, String originalMetadata) throws IOException {
         try (RandomAccessFile raf = new RandomAccessFile(filename, "rw");
              FileChannel channel = raf.getChannel()) {
 
@@ -873,7 +1092,16 @@ public class PsdColorSeparator {
             dos.writeInt(0);                  // No color mode data
 
             // Image Resources Section
-            dos.writeInt(0);                  // No image resources
+            ByteArrayOutputStream resourcesStream = new ByteArrayOutputStream();
+            DataOutputStream resources = new DataOutputStream(resourcesStream);
+
+            // Add XMP metadata (Resource 1060 - what Photoshop File Info reads)
+            // Preserves original metadata if present, appends Trapper processing info
+            writeImageResourceBlock(resources, 1060, createXMPMetadata(originalMetadata));
+
+            byte[] resourcesBytes = resourcesStream.toByteArray();
+            dos.writeInt(resourcesBytes.length);
+            dos.write(resourcesBytes);
 
             // Layer and Mask Information Section
             ByteArrayOutputStream layerInfoStream = new ByteArrayOutputStream();
