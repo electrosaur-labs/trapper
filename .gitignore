@@ -6,6 +6,7 @@ bin/
 # IDE
 .idea/
 .vscode/
+.claude/
 *.iml
 *.ipr
 *.iws
