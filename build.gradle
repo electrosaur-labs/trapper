@@ -91,3 +91,12 @@ task psdInfo(type: JavaExec) {
     }
 }
 
+// Task to resize PSD files
+task resizePsd(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'org.electrosaur.trapper.PsdResizer'
+    if (project.hasProperty('psdFile') && project.hasProperty('scale')) {
+        args project.property('psdFile'), project.property('scale')
+    }
+}
+
