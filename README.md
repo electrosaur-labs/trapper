@@ -8,6 +8,22 @@ A Java application that performs color trapping (also known as "choking" and "sp
 
 Trapper reads Photoshop PSD files, separates colors into individual layers, and applies trapping by expanding lighter colors under darker colors. This prevents white gaps from appearing when printing plates are slightly misaligned.
 
+### Choose Your Interface
+
+**🎨 [Trapper Photoshop Plugin](https://github.com/electrosaur-labs/trapper-photoshop)** - *Recommended for most users*
+- Seamless integration - trap directly inside Photoshop
+- Perfect for designers and small print shops
+- No file export/import needed
+- Works with Photoshop 2024+
+
+**⚙️ This Standalone Tool** - *For automation and advanced workflows*
+- Command-line batch processing
+- Works without Photoshop (supports Affinity Photo, GIMP, etc.)
+- Integration into production pipelines
+- Scriptable for automation
+
+Both implementations use identical trapping algorithms and produce pixel-perfect results.
+
 ## Features
 
 - **Color Separation**: Automatically separates images into distinct color layers sorted by lightness
@@ -342,12 +358,13 @@ Output PSD files contain:
 
 ## Future Enhancements
 
+- [x] **Photoshop plugin** for seamless workflow integration (see [trapper-photoshop](https://github.com/electrosaur-labs/trapper-photoshop))
+- [x] GUI interface for parameter adjustment (v2.0)
+- [x] Multiple printing mode support (v2.0)
 - [ ] Support for more than 10 colors
 - [ ] CMYK color mode support
 - [ ] Configurable dilation algorithm (8-connected neighbors)
-- [x] GUI interface for parameter adjustment (v2.0)
-- [x] Multiple printing mode support (v2.0)
-- [ ] Batch processing support
+- [ ] Batch processing support in standalone GUI
 - [ ] Preview generation
 
 ## License
