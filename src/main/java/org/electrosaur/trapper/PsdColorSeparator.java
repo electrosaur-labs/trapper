@@ -197,9 +197,9 @@ public class PsdColorSeparator {
     public static void processFile(String inputFile, String outputFile,
                                    double minExpansion, double maxExpansion,
                                    TrappingStrategy strategy) throws IOException {
-        // Step 1: Read and flatten the PSD, get DPI and existing metadata
+        // Step 1: Read the single-layer PSD, get DPI and existing metadata
         PsdInfo psdInfo = readAndFlattenPSD(inputFile);
-        BufferedImage flattened = psdInfo.image;
+        BufferedImage sourceImage = psdInfo.image;
         int dpi = psdInfo.dpi;
         String originalMetadata = psdInfo.copyrightMetadata;
 
@@ -212,7 +212,7 @@ public class PsdColorSeparator {
             maxExpansion > 0 ? (int)Math.round(1.0 / maxExpansion) : 0);
 
         // Step 2: Count distinct colors (ignoring transparent pixels)
-        Map<Integer, Integer> colorCounts = countColors(flattened);
+        Map<Integer, Integer> colorCounts = countColors(sourceImage);
 
         // Step 3: Check color count
         if (colorCounts.size() > MAX_COLORS) {
@@ -227,15 +227,15 @@ public class PsdColorSeparator {
         List<Integer> sortedColors = sortColorsByLightness(colorCounts.keySet());
 
         // Step 5: Create output PSD with color-separated layers and trapping
-        List<LayerData> layers = createColorSeparatedLayers(flattened, sortedColors, dpi,
+        List<LayerData> layers = createColorSeparatedLayers(sourceImage, sortedColors, dpi,
                                                             minExpansion, maxExpansion, strategy);
 
         // Step 6: Verify that flattening the trapped layers matches the original
         System.out.println("Verifying trapped output...");
-        int width = flattened.getWidth();
-        int height = flattened.getHeight();
+        int width = sourceImage.getWidth();
+        int height = sourceImage.getHeight();
         BufferedImage trappedFlattened = flattenLayers(layers, width, height);
-        verifyFlattening(flattened, trappedFlattened);
+        verifyFlattening(sourceImage, trappedFlattened);
 
         // Step 7: Write the PSD file with preserved metadata
         System.out.println("Writing output PSD file...");
@@ -349,7 +349,8 @@ public class PsdColorSeparator {
     }
 
     /**
-     * Reads a PSD file and flattens all layers into a single image
+     * Reads a single-layer PSD file
+     * Validates that exactly one layer exists
      * Also extracts DPI information from the file
      */
     private static PsdInfo readAndFlattenPSD(String filename) throws IOException {
@@ -366,7 +367,16 @@ public class PsdColorSeparator {
             ImageReader reader = readers.next();
             reader.setInput(iis);
 
-            // Read the composite/flattened image (index -1 or 0)
+            // Validate that PSD has exactly one layer
+            int numImages = reader.getNumImages(true);
+            if (numImages != 1) {
+                throw new IllegalArgumentException(
+                    String.format("PSD file must have exactly 1 layer, but has %d layers.\n" +
+                        "Please flatten layers before processing:\n" +
+                        "  In Photoshop: Layer > Flatten Image (or press Ctrl+E)", numImages));
+            }
+
+            // Read the single layer
             BufferedImage image = reader.read(0);
 
             // Try to extract DPI from metadata

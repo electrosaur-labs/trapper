@@ -129,8 +129,9 @@ java -jar build/libs/trapper-2.0-all.jar input.psd 0 1/32   # CLI mode
 ### Core Processing Pipeline
 
 1. **PsdColorSeparator** (`PsdColorSeparator.java`) - Main engine
-   - Reads PSD using TwelveMonkeys ImageIO
-   - Flattens image and analyzes colors
+   - Reads single-layer PSD using TwelveMonkeys ImageIO
+   - Validates exactly one layer exists (unlocks if locked)
+   - Analyzes colors from the single layer
    - Sorts colors by lightness (white → black)
    - Creates masks showing where darker colors cover lighter colors
    - Applies trapping via morphological dilation (4-connected neighbors)
@@ -153,7 +154,7 @@ java -jar build/libs/trapper-2.0-all.jar input.psd 0 1/32   # CLI mode
 ### Key Algorithms
 
 **Color Separation:**
-- Extract all unique RGB colors from flattened image
+- Extract all unique RGB colors from single input layer
 - Sort by lightness: `0.299*R + 0.587*G + 0.114*B`
 - Create separate layer for each color (max 10 colors)
 
@@ -225,17 +226,19 @@ src/test/resources/
 
 Reference `DECISIONS.md` for full rationale. Key points:
 
-1. **PSD Format:** Native PSD output (not multi-layer TIFF) because no mature open-source Java library can reliably write Photoshop TIFF multi-layer files.
+1. **Single-Layer Input:** Require exactly one layer in source PSD. User must flatten layers before processing. This provides clear scope (trapping, not compositing), eliminates ambiguity about layer effects/blend modes, and matches professional pre-press workflows.
 
-2. **Universal Trapping:** Both offset and screen printing modes use identical trap calculation (light expands under dark). Industry terminology varies, but physics is universal.
+2. **PSD Format:** Native PSD output (not multi-layer TIFF) because no mature open-source Java library can reliably write Photoshop TIFF multi-layer files.
 
-3. **Metadata Preservation:** Preserve original XMP metadata intact. Add processing history to `xmpMM:History` but do NOT set copyright/creator fields - images belong to their creators, not the processing software.
+3. **Universal Trapping:** Both offset and screen printing modes use identical trap calculation (light expands under dark). Industry terminology varies, but physics is universal.
 
-4. **Parallel Processing:** Layer processing is parallelized for 3.2x speedup. Accept non-deterministic byte-level output as long as pixel values are correct.
+4. **Metadata Preservation:** Preserve original XMP metadata intact. Add processing history to `xmpMM:History` but do NOT set copyright/creator fields - images belong to their creators, not the processing software.
 
-5. **White Layer Optimization:** Skip trap computation for white base layers (RGB 255,255,255) since white doesn't need trapping.
+5. **Parallel Processing:** Layer processing is parallelized for 3.2x speedup. Accept non-deterministic byte-level output as long as pixel values are correct.
 
-6. **PackBits Compression:** Use RLE compression for 96%+ file size reduction (827 MB → 28 MB typical).
+6. **White Layer Optimization:** Skip trap computation for white base layers (RGB 255,255,255) since white doesn't need trapping.
+
+7. **PackBits Compression:** Use RLE compression for 96%+ file size reduction (827 MB → 28 MB typical).
 
 ## Testing Strategy
 
@@ -293,11 +296,25 @@ When modifying core algorithms, ensure changes are reflected in both implementat
 
 ## Limitations and Constraints
 
+- **Single layer input required** - Source PSD must have exactly one layer (flatten before processing)
 - Maximum 10 distinct colors per image
 - RGB color mode only (no CMYK, Lab, Grayscale, Indexed)
 - 8 bits per channel only (no 16/32-bit)
-- No layer effects, adjustment layers, or smart objects in source PSD
 - Output is PSD format only (not multi-layer TIFF)
+
+### Input Preparation
+
+**Before running Trapper, prepare your PSD:**
+1. **Flatten layers** - In Photoshop: Layer > Flatten Image (or Ctrl+E)
+2. Ensure RGB color mode - Image > Mode > RGB Color
+3. Ensure 8-bit depth - Image > Mode > 8 Bits/Channel
+
+**Why single-layer requirement?**
+- Allows user to control compositing (which layers visible, blend modes, effects)
+- Eliminates ambiguity about hidden layers, layer effects, masks, smart objects
+- Matches professional pre-press workflow (provide "camera-ready" artwork)
+- Simpler, more reliable tool that does one thing well
+- See DECISIONS.md for full rationale
 
 ### Why RGB Mode Only (No CMYK Support)
 

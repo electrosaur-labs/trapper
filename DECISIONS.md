@@ -279,6 +279,41 @@ This document captures key architectural and design decisions made during the de
 
 ---
 
+## Single-Layer Input Requirement
+
+**Decision:** Only accept PSD files with exactly one layer. Require users to flatten multi-layer documents before processing.
+
+**Date:** 2026-01-03
+
+**Rationale:**
+- **Clear scope** - Tool focuses on color trapping algorithm, not image compositing
+- **User control** - Designer decides how to flatten (which layers visible, effects applied, blend modes)
+- **Eliminates ambiguity** - No questions about hidden layers, layer effects, blend modes, masks, smart objects
+- **Professional workflow alignment** - Pre-press workflows already require "camera-ready" flattened artwork
+- **Simpler codebase** - Remove document duplication and flattening logic
+- **Better results** - User previews exact flattened result before trapping
+- **Clearer errors** - "Please flatten layers first" vs complex multi-layer edge cases
+
+**Separation of concerns:**
+- **Photoshop's job:** Compositing, effects, blending, design decisions
+- **Trapper's job:** Color separation and trapping algorithm
+
+**User impact:**
+- Minimal - Flattening is one keyboard shortcut (Ctrl+E) in Photoshop
+- Positive - User has full control over compositing results
+- Professional - Matches standard pre-press preparation workflow
+
+**Implementation:**
+- Validate layer count at document load time
+- If locked, unlock the single layer automatically
+- Error with clear instructions if multiple layers detected
+
+**Alternative considered:**
+- Auto-flatten inside tool: Rejected due to ambiguity (hidden layers? effects? blend modes?)
+- User has better tools (Photoshop) and knowledge to make these decisions
+
+---
+
 ## Lessons Learned
 
 ### Ask Clarifying Questions for Legal/Ownership Decisions
@@ -297,4 +332,5 @@ This document captures key architectural and design decisions made during the de
 
 ## Document Change History
 
+- 2026-01-03: Added single-layer input requirement decision
 - 2026-01-02: Initial creation - captured key decisions from project history

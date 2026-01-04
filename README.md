@@ -67,6 +67,23 @@ To create the standalone executable JAR:
 
 This creates `build/libs/trapper-2.0-all.jar` - a single file containing all dependencies.
 
+## Preparing Your File
+
+**Before running Trapper, prepare your PSD file:**
+
+1. **Flatten all layers** (Required)
+   - In Photoshop: `Layer > Flatten Image` (or press `Ctrl+E`)
+   - Trapper requires exactly **one layer** in the source PSD
+   - This gives you control over compositing (which layers visible, blend modes, effects)
+
+2. **Ensure RGB color mode**
+   - In Photoshop: `Image > Mode > RGB Color`
+
+3. **Ensure 8-bit color depth**
+   - In Photoshop: `Image > Mode > 8 Bits/Channel`
+
+**Why single-layer?** Trapper focuses on color trapping, not image compositing. You have better tools (Photoshop) to decide how layers, effects, and blend modes should be composited. This matches professional pre-press workflows where "camera-ready" artwork is provided as a single flattened image.
+
 ## Usage
 
 ### GUI Mode (Recommended)
@@ -350,11 +367,11 @@ Output PSD files contain:
 
 ## Limitations
 
+- **Single layer input required** - Source PSD must have exactly one layer (see "Preparing Your File" above)
 - Maximum 10 distinct colors per image
 - RGB color mode only
 - 8 bits per channel
-- No support for layer effects, adjustment layers, or smart objects
-- PSD output (not TIFF with layers)
+- PSD output format only (not TIFF with layers)
 
 ## Future Enhancements
 
