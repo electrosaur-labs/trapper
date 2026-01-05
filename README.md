@@ -39,6 +39,7 @@ Both implementations use identical trapping algorithms and produce pixel-perfect
 
 - Java 21+
 - Gradle 8.5+
+- **Input documents must be in RGB color mode** (CMYK, Lab, Grayscale, and Indexed modes not supported - convert to RGB before processing)
 
 ## Download (For Non-Technical Users)
 
@@ -141,7 +142,7 @@ java -cp build/libs/trapper.jar org.electrosaur.trapper.PsdColorSeparator input.
 
 ```
 Usage: java PsdColorSeparator <input.psd> [minTrap] [maxTrap] [mode]
-  minTrap: minimum trap size (darkest layer, default: 0)
+  minTrap: minimum trap size for darkest layer (currently fixed at 0 - defines sharp edges)
   maxTrap: maximum trap size (lightest layer, default: 1/32)
   mode:    printing mode - "offset" or "screen" (default: offset)
 
@@ -155,19 +156,19 @@ Trap sizes can be specified as:
 
 #### Offset Lithography
 - **Description**: High-precision commercial printing
-- **Trap Direction**: Light spreads into dark
+- **Trap Direction**: Lighter colors expand under darker colors
 - **Typical Range**: 0 to 1/32" (0.03125")
 - **Typical DPI**: 300 DPI
 - **Use Cases**: Commercial printing, magazines, packaging
 
 #### Screen Printing
 - **Description**: Garment printing, posters, textiles
-- **Trap Direction**: Dark traps over light
-- **Typical Range**: 0 to 6 points (0 to 0.083")
+- **Trap Direction**: Dark traps over light (industry terminology)
+- **Typical Range**: 0 to 4-6 points (0.056-0.083")
 - **Typical DPI**: 300-600 DPI
 - **Use Cases**: T-shirts, posters, signage
 
-**Note**: Both modes use identical trap calculation (light layers expand under dark layers). The difference is only in terminology and typical trap sizes.
+**Note**: Both modes use **identical trap calculation** (lighter colors expand under darker colors). The "trap direction" terminology differs between industries, but the implementation is universal: lighter layers get more expansion, darker layers define edges.
 
 ### PSD File Information
 
@@ -220,7 +221,7 @@ Compression:      1.2x (18.2% reduction)
 ### Trap Size Interpolation
 
 - **Lightest layer**: Maximum trap size (e.g., 1/32" = ~9 pixels at 300 DPI)
-- **Darkest layer**: Minimum trap size (e.g., 0" = defines edges)
+- **Darkest layer**: Minimum trap size (currently fixed at 0) - Defines sharp edges. The darkest layer has no darker color above it to hide trap under, so expansion would make edges appear blurry.
 - **Middle layers**: Linear interpolation between min and max
 
 ### Example
@@ -352,7 +353,7 @@ In offset lithography, each color is printed from a separate plate. Slight misal
 
 ### Implementation Approach
 
-- **Morphological Dilation**: Iterative 4-connected neighbor expansion
+- **Morphological Dilation**: Iterative 4-connected neighbor expansion (top, right, bottom, left)
 - **Masked Expansion**: Only expands into areas that will be covered by darker colors
 - **Parallel Processing**: Each layer processed independently using thread pool
 - **RLE Compression**: PackBits algorithm reduces file size significantly
@@ -368,7 +369,7 @@ Output PSD files contain:
 ## Limitations
 
 - **Single layer input required** - Source PSD must have exactly one layer (see "Preparing Your File" above)
-- Maximum 10 distinct colors per image
+- **Maximum 10 distinct colors** per image - This limit accommodates complex screen printing designs and packaging work. Most commercial spot color printing uses 4-6 colors or fewer.
 - RGB color mode only
 - 8 bits per channel
 - PSD output format only (not TIFF with layers)
@@ -379,6 +380,7 @@ Output PSD files contain:
 - [x] GUI interface for parameter adjustment (v2.0)
 - [x] Multiple printing mode support (v2.0)
 - [ ] Support for more than 10 colors
+- [ ] Configurable minTrap for darkest layer (currently fixed at 0)
 - [ ] CMYK color mode support
 - [ ] Configurable dilation algorithm (8-connected neighbors)
 - [ ] Batch processing support in standalone GUI

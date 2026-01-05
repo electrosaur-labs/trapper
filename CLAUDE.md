@@ -22,7 +22,7 @@ Trapper is a Java application that performs color trapping (choking/spreading) f
 
 In multi-color printing, each color prints from a separate plate (offset lithography) or screen (screen printing). Slight misalignment between plates creates visible white gaps where colors should meet. Trapping compensates by expanding lighter colors under darker colors to create overlap.
 
-**Key principle:** Light colors spread under dark colors (universal across all printing modes)
+**Key principle:** Lighter colors expand under darker colors to create overlap (universal across all printing modes)
 
 **Why this works:**
 - Darker colors hide the trap (overlap is not visible)
@@ -39,7 +39,7 @@ In multi-color printing, each color prints from a separate plate (offset lithogr
 
 2. **Screen Printing**
    - Garment printing, posters, textiles
-   - Typical trap range: 0 to 4-6 points (0 to 0.056-0.083")
+   - Typical trap range: 0 to 4-6 points (0.056-0.083")
    - Typical DPI: 300-600
    - Use cases: T-shirts, posters, signage
 
@@ -134,7 +134,7 @@ java -jar build/libs/trapper-2.0-all.jar input.psd 0 1/32   # CLI mode
    - Analyzes colors from the single layer
    - Sorts colors by lightness (white → black)
    - Creates masks showing where darker colors cover lighter colors
-   - Applies trapping via morphological dilation (4-connected neighbors)
+   - Applies trapping via morphological dilation (4-connected neighbors: top, right, bottom, left)
    - Writes multi-layer PSD with PackBits RLE compression
    - Verifies output by flattening and comparing to original
 
@@ -161,14 +161,19 @@ java -jar build/libs/trapper-2.0-all.jar input.psd 0 1/32   # CLI mode
 **Trap Calculation:**
 - White base layer: 0 pixels (optimization - white doesn't trap)
 - Lightest non-white layer: maximum trap size
-- Darkest layer: minimum trap size (typically 0 - defines edges)
+- Darkest layer: minimum trap size (currently fixed at 0) - Defines sharp edges. The darkest layer has no darker color above it to hide trap under, so expansion would make edges appear blurry.
 - Middle layers: linear interpolation
-- Formula: `pixels = (minTrap + (maxTrap - minTrap) * normalizedPosition) * DPI`
+- Formula:
+  ```
+  normalizedPosition = (layerIndex - whiteLayerCount) / (nonWhiteLayerCount - 1)
+  trapSize = minTrap + (maxTrap - minTrap) * (1.0 - normalizedPosition)
+  pixels = trapSize * DPI
+  ```
 
 **Trapping Process:**
 - For each layer (parallel processing):
   - Create mask of areas covered by darker layers
-  - Iteratively dilate layer pixels into masked areas (4-connected neighbors)
+  - Iteratively dilate layer pixels into masked areas (4-connected neighbors: top, right, bottom, left)
   - Stop when expansion count reached or no more pixels to expand
 
 **File Format:**
@@ -261,7 +266,7 @@ Reference `DECISIONS.md` for full rationale. Key points:
 ### Modifying Trap Calculation
 
 - Core logic: `PsdColorSeparator.applyTrapping()` method
-- Iterative dilation: `expandPixel()` helper method (4-connected neighbors)
+- Iterative dilation: `expandPixel()` helper method (4-connected neighbors: top, right, bottom, left)
 - Change to 8-connected: Modify neighbor offsets in `expandPixel()`
 
 ### Adding New PSD Features
@@ -297,7 +302,7 @@ When modifying core algorithms, ensure changes are reflected in both implementat
 ## Limitations and Constraints
 
 - **Single layer input required** - Source PSD must have exactly one layer (flatten before processing)
-- Maximum 10 distinct colors per image
+- **Maximum 10 distinct colors** per image - This limit accommodates complex screen printing designs (typical max: 7-10 colors) and packaging work, while most commercial spot color printing uses 4-6 colors or fewer
 - RGB color mode only (no CMYK, Lab, Grayscale, Indexed)
 - 8 bits per channel only (no 16/32-bit)
 - Output is PSD format only (not multi-layer TIFF)

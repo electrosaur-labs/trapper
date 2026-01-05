@@ -9,7 +9,7 @@ package org.electrosaur.trapper;
  * - This is visually less noticeable since lighter inks are more transparent
  * - Preserves sharp edges defined by darker ink
  *
- * Typical trap sizes: 0.003" to 1/32" (0.03125") at 3000 DPI
+ * Typical trap sizes: 0.003" to 1/32" (0.03125") at 300 DPI
  *
  * Implementation: Light layers get maximum expansion, dark layers get minimum.
  * This is the original implementation from v1.x of Trapper.
@@ -29,7 +29,7 @@ public class OffsetTrappingStrategy extends AbstractTrappingStrategy {
     @Override
     public String getDescription() {
         return "Lighter colors spread into darker colors. Suitable for high-precision " +
-               "commercial printing (0.003\" to 1/32\" traps at 3000 DPI).";
+               "commercial printing (0.003\" to 1/32\" traps at 300 DPI).";
     }
 
     @Override

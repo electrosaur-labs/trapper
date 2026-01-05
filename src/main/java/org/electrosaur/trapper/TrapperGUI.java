@@ -248,7 +248,7 @@ public class TrapperGUI extends JFrame {
     private void updateModeInfoLabel(JLabel label) {
         String mode = (String) modeComboBox.getSelectedItem();
         if (mode.equals("Offset Lithography")) {
-            label.setText("Light expands under dark - Typical: 0-1/32\" @ 3000 DPI");
+            label.setText("Light expands under dark - Typical: 0-1/32\" @ 300 DPI");
         } else {
             label.setText("Light expands under dark - Typical: 0-6pt @ 300-600 DPI");
         }
