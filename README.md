@@ -85,6 +85,67 @@ This creates `build/libs/trapper-2.0-all.jar` - a single file containing all dep
 
 **Why single-layer?** Trapper focuses on color trapping, not image compositing. You have better tools (Photoshop) to decide how layers, effects, and blend modes should be composited. This matches professional pre-press workflows where "camera-ready" artwork is provided as a single flattened image.
 
+## Using Trapper with GIMP, Affinity Photo, Krita, etc.
+
+Trapper works with **any image editor that can export and import PSD files**. While the Photoshop plugin provides the most seamless experience, the Java CLI tool is fully tool-agnostic.
+
+### GIMP Workflow
+
+**1. Prepare your image in GIMP:**
+- Flatten your layers: `Image > Flatten Image`
+- Ensure RGB mode: `Image > Mode > RGB`
+- Ensure 8-bit: `Image > Precision > 8-bit integer`
+
+**2. Export as PSD:**
+- `File > Export As...`
+- Choose `.psd` extension
+- Save options: Select "Compatibility Mode" (flattened, no layers)
+
+**3. Run Trapper:**
+```bash
+# GUI mode
+java -jar trapper-2.0-all.jar
+
+# Or command-line mode
+java -cp trapper-2.0-all.jar org.electrosaur.trapper.PsdColorSeparator input.psd 0 1/32
+```
+
+**4. Import result back into GIMP:**
+- `File > Open as Layers...`
+- Select the `_trapped.psd` output file
+- GIMP will import all color-separated layers
+
+**5. Continue your workflow:**
+- Each color is now on a separate layer
+- Export individual layers for screen burning
+- Or export as multi-layer PSD for print shop
+
+### Affinity Photo Workflow
+
+Same process as GIMP:
+- `File > Export > PSD` (flattened)
+- Run Trapper
+- `File > Open` the trapped PSD
+
+Affinity Photo has excellent PSD support including layer compositing.
+
+### Krita Workflow
+
+Krita also supports PSD import/export:
+- `File > Export > Adobe Photoshop Image`
+- Run Trapper
+- `File > Open` the trapped PSD
+
+### Why This Works
+
+The PSD format is an industry standard supported by virtually all professional image editors. Trapper:
+- ✅ Reads standard PSD files (RGB, 8-bit)
+- ✅ Writes standard PSD files with multiple layers
+- ✅ Uses PackBits compression (universally supported)
+- ✅ Preserves XMP metadata
+
+**Open source commitment**: While we provide a Photoshop plugin for convenience, the core trapping engine is available as a standalone GPL-3.0 tool that works with any software.
+
 ## Usage
 
 ### GUI Mode (Recommended)
