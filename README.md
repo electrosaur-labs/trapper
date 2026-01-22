@@ -1,6 +1,6 @@
 # Trapper - Color Trapping System for Print Production
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A Java application that performs color trapping (also known as "choking" and "spreading") for multi-color printing to compensate for misregistration between printing plates. Supports both offset lithography and screen printing modes.
 
@@ -449,9 +449,7 @@ Output PSD files contain:
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
-
-This means you are free to use, modify, and distribute this software, but any derivative works must also be released under GPL-3.0.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
